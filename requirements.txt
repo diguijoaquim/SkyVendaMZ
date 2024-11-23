@@ -11,3 +11,4 @@ python-slugify
 shortuuid
 python-jose
 python-multipart
+aiofiles
