@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from models import Base
 from fastapi import FastAPI, Request
-
+#OLA MUNDO
 from fastapi.responses import HTMLResponse
 from routers.admin import router as admin_router
 from routers.comentario import router as comentario_router
