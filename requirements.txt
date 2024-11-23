@@ -1,4 +1,5 @@
 SQLAlchemy
+uvicorn
 unidecode
 fastapi
 python-decouple
