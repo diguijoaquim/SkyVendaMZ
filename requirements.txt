@@ -9,3 +9,6 @@ passlib
 pydantic[email]
 python-slugify
 shortuuid
+python-jose
+python-multipart
+aiofiles

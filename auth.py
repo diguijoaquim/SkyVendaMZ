@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from models import Usuario, Admin  # Adicione a importação da classe Admin
 from schemas import UsuarioCreate,AdminCreate,AdminBase
 from database import SessionLocal
-
+ 
 
 def get_db():
     db = SessionLocal()
