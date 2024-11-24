@@ -123,29 +123,27 @@ class Admin(Base):
 
 
 
-
 class InfoUsuario(Base):
     __tablename__ = "info_usuario"
     
     id = Column(Integer, primary_key=True, index=True)
-    perfil = Column(String(350))
+    foto_retrato = Column(String(350))  # Foto do rosto do usuário
+    foto_bi_frente = Column(String(350))  # Frente do BI
+    foto_bi_verso = Column(String(350))  # Verso do BI
     provincia = Column(String(350))
-    foto_bi = Column(String(350))
     distrito = Column(String(350))
     data_nascimento = Column(String(350))
     localizacao = Column(String(350))
-    avenida = Column(String(255), nullable=True)
     estado = Column(String(350))
-    sexo=Column(String(20))
-    tipo=Column(String(10))
-    nacionalidade=Column(String(255),nullable=True)
-    revisao = Column(String(255), default="não")
+    contacto=Column(String(20),nullable=True)
+    sexo = Column(String(20))
+    nacionalidade = Column(String(255), nullable=True)
     bairro = Column(String(255), nullable=True)
+    revisao = Column(String(255), default="não")
     
     # Relacionamento com Usuario
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
     usuario = relationship("Usuario", back_populates="info_usuario")
-
 
 
 class Publicacao(Base):

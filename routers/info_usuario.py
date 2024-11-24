@@ -4,51 +4,51 @@ from auth import *
 from fastapi import APIRouter,Form
 router=APIRouter(prefix="/info_usuario",tags=["rotas de infousuari"])
 
-
 @router.post("/")
 async def create_info_usuario(
-    fotos: List[UploadFile] = File(...),  # Lista de 3 fotos (frente, verso do BI, e foto do usuário com BI)
+    fotos: List[UploadFile] = File(...),  # Lista de 3 fotos (frente, verso do BI, rosto do usuário)
     provincia: str = Form(...),
     distrito: str = Form(...),
     data_nascimento: str = Form(...),
     localizacao: str = Form(...),
-    estado: str = Form(...),  
-    avenida: Optional[str] = Form(None),
-    nacionalidade:Optional[str]=Form(None),
+    estado: str = Form(...),
+    sexo: str = Form(...),
+    contacto:Optional[str] = Form(None),
+    nacionalidade: Optional[str] = Form(None),
     bairro: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
     # Validação para garantir que 3 fotos sejam enviadas
     if len(fotos) != 3:
-        raise HTTPException(status_code=400, detail="Você deve enviar exatamente 3 fotos: frente, verso do BI, e uma foto sua com o BI.")
+        raise HTTPException(status_code=400, detail="Você deve enviar exatamente 3 fotos: frente, verso do BI e uma foto do rosto.")
 
     # Salvando as imagens
-    perfil_filename = save_image(fotos[2], PROFILE_UPLOAD_DIR)  # Foto do usuário segurando o BI (3ª foto)
-    bi_frente_filename = save_image(fotos[0], DOCUMENT_UPLOAD_DIR)  # Foto da frente do BI (1ª foto)
-    bi_tras_filename = save_image(fotos[1], DOCUMENT_UPLOAD_DIR)  # Foto do verso do BI (2ª foto)
+    rosto_filename = save_image(fotos[2],DOCUMENT_UPLOAD_DIR)  # Foto do rosto do usuário
+    bi_frente_filename = save_image(fotos[0], DOCUMENT_UPLOAD_DIR)  # Frente do BI
+    bi_verso_filename = save_image(fotos[1], DOCUMENT_UPLOAD_DIR)  # Verso do BI
 
-    # Criando o objeto InfoUsuarioCreate para facilitar a passagem de dados
+    # Criando o objeto InfoUsuarioCreate
     info_usuario_data = InfoUsuarioCreate(
-        perfil=perfil_filename,
+        foto_retrato=rosto_filename,  # Foto do rosto
+        foto_bi_frente=bi_frente_filename,
+        foto_bi_verso=bi_verso_filename,
         provincia=provincia,
-        foto_bi=f"{bi_frente_filename},{bi_tras_filename},{perfil_filename}",  # Fotos concatenadas
         distrito=distrito,
         data_nascimento=data_nascimento,
         localizacao=localizacao,
         estado=estado,
-        usuario_id=current_user.id,
-        avenida=avenida,
+        sexo=sexo,
+        contacto=contacto,
         nacionalidade=nacionalidade,
-        bairro=bairro
+        bairro=bairro,
+        usuario_id=current_user.id
     )
 
     # Criando a entrada no banco de dados
-    #db_info_usuario = create_info_usuario_db(db=db, info_usuario=info_usuario_data, current_user_id=current_user.id)
     db_info_usuario = create_info_usuario_db(db=db, info_usuario=info_usuario_data, current_user=current_user.id)
 
     return {"message": "Informações do usuário criadas com sucesso", "info_usuario": db_info_usuario}
-
 
 @router.post("/{info_usuario_id}/perfil/")
 async def upload_profile_picture(

@@ -80,18 +80,22 @@ class Admin(AdminBase):
     class Config:
        ConfigDict(from_attributes=True)
 
-# Schema base para InfoUsuario
 class InfoUsuarioCreate(BaseModel):
-    perfil: str
+    foto_retrato: str  # Foto do rosto do usuário
+    foto_bi_frente: str  # Frente do BI
+    foto_bi_verso: str  # Verso do BI
     provincia: str
-    foto_bi: str
     distrito: str
     data_nascimento: str
     localizacao: str
-    avenida: Optional[str] = None
     estado: str
-    usuario_id:int
+    contacto:Optional[str]=None
+    sexo: str
+    nacionalidade: Optional[str] = None
     bairro: Optional[str] = None
+    usuario_id: int
+
+
 
 
 

@@ -12,3 +12,4 @@ shortuuid
 python-jose
 python-multipart
 aiofiles
+bcrypt
