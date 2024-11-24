@@ -14,3 +14,4 @@ python-multipart
 aiofiles
 bcrypt
 pymysql
+mysqlclient

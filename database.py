@@ -1,6 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import pymysql
+pymysql.install_as_MySQLdb()
 
 # URL de conexão MyS
 DATABASE_URL = "mysql://root:JnFGIKioXKnFrSKyQepNhSKMqZDFuqse@junction.proxy.rlwy.net:45048/railway"
