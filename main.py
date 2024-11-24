@@ -27,7 +27,7 @@ app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir todos os domínios. Ajuste conforme necessário.
+    allow_origins=["https://skyvenda-mz.vercel.app"],  # Permitir todos os domínios. Ajuste conforme necessário.
     allow_credentials=True,
     allow_methods=["*"],  # Permitir todos os métodos HTTP.
     allow_headers=["*"],  # Permitir todos os cabeçalhos.
