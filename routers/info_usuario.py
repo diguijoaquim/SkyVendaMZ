@@ -14,7 +14,7 @@ async def create_info_usuario(
     localizacao: str = Form(...),
     estado: str = Form(...),
     sexo: str = Form(...),
-    avenida: Optional[str] = Form(None),
+    contacto: Optional[str] = Form(None),
     nacionalidade: Optional[str] = Form(None),
     bairro: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -36,6 +36,7 @@ async def create_info_usuario(
         localizacao=localizacao,
         estado=estado,
         sexo=sexo,
+        contacto=contacto,
         nacionalidade=nacionalidade,
         bairro=bairro,
         usuario_id=current_user.id

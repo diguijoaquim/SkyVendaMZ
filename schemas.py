@@ -91,7 +91,7 @@ class InfoUsuarioCreate(BaseModel):
     avenida: Optional[str] = None
     estado: str
     sexo: str
-    contacto=Optional[str]=None
+    contacto: Optional[str]=None
     nacionalidade: Optional[str] = None
     bairro: Optional[str] = None
     usuario_id: int
