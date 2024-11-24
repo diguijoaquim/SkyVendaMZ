@@ -82,18 +82,20 @@ class Admin(AdminBase):
 
 class InfoUsuarioCreate(BaseModel):
     foto_retrato: str  # Foto do rosto do usuário
-    foto_bi_frente: str  # Frente do BI
-    foto_bi_verso: str  # Verso do BI
+    foto_bi_frente: str  # Foto da frente do BI
+    foto_bi_verso: str  # Foto do verso do BI
     provincia: str
     distrito: str
     data_nascimento: str
     localizacao: str
+    avenida: Optional[str] = None
     estado: str
-    contacto:Optional[str]=None
     sexo: str
+    contacto=Optional[str]=None
     nacionalidade: Optional[str] = None
     bairro: Optional[str] = None
     usuario_id: int
+
 
 
 

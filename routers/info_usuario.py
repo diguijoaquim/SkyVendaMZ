@@ -3,43 +3,39 @@ from schemas import *
 from auth import *
 from fastapi import APIRouter,Form
 router=APIRouter(prefix="/info_usuario",tags=["rotas de infousuari"])
-
 @router.post("/")
 async def create_info_usuario(
-    fotos: List[UploadFile] = File(...),  # Lista de 3 fotos (frente, verso do BI, rosto do usuário)
+    foto_retrato: UploadFile = File(...),  # Foto do rosto do usuário
+    foto_bi_frente: UploadFile = File(...),  # Frente do BI
+    foto_bi_verso: UploadFile = File(...),  # Verso do BI
     provincia: str = Form(...),
     distrito: str = Form(...),
     data_nascimento: str = Form(...),
     localizacao: str = Form(...),
     estado: str = Form(...),
     sexo: str = Form(...),
-    contacto:Optional[str] = Form(None),
+    avenida: Optional[str] = Form(None),
     nacionalidade: Optional[str] = Form(None),
     bairro: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    # Validação para garantir que 3 fotos sejam enviadas
-    if len(fotos) != 3:
-        raise HTTPException(status_code=400, detail="Você deve enviar exatamente 3 fotos: frente, verso do BI e uma foto do rosto.")
-
     # Salvando as imagens
-    rosto_filename = save_image(fotos[2],DOCUMENT_UPLOAD_DIR)  # Foto do rosto do usuário
-    bi_frente_filename = save_image(fotos[0], DOCUMENT_UPLOAD_DIR)  # Frente do BI
-    bi_verso_filename = save_image(fotos[1], DOCUMENT_UPLOAD_DIR)  # Verso do BI
+    foto_retrato_filename = save_image(foto_retrato, DOCUMENT_UPLOAD_DIR)  # Foto do rosto
+    foto_bi_frente_filename = save_image(foto_bi_frente, DOCUMENT_UPLOAD_DIR)  # Frente do BI
+    foto_bi_verso_filename = save_image(foto_bi_verso, DOCUMENT_UPLOAD_DIR)  # Verso do BI
 
     # Criando o objeto InfoUsuarioCreate
     info_usuario_data = InfoUsuarioCreate(
-        foto_retrato=rosto_filename,  # Foto do rosto
-        foto_bi_frente=bi_frente_filename,
-        foto_bi_verso=bi_verso_filename,
+        foto_retrato=foto_retrato_filename,  # Foto do rosto
+        foto_bi_frente=foto_bi_frente_filename,  # Frente do BI
+        foto_bi_verso=foto_bi_verso_filename,  # Verso do BI
         provincia=provincia,
         distrito=distrito,
         data_nascimento=data_nascimento,
         localizacao=localizacao,
         estado=estado,
         sexo=sexo,
-        contacto=contacto,
         nacionalidade=nacionalidade,
         bairro=bairro,
         usuario_id=current_user.id
