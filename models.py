@@ -25,8 +25,8 @@ class Message(Base):
     receiver_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     content = Column(Text, nullable=True)  # Pode ser null para tipos como IMAGE, PDF, etc.
     message_type = Column(Enum(MessageType), nullable=False)
-    file_url = Column(String, nullable=True)  # URL do arquivo, se aplicável
-    file_name = Column(String, nullable=True)  # Nome do arquivo, se aplicável
+    file_url = Column(String(250), nullable=True)  # URL do arquivo, se aplicável
+    file_name = Column(String(250), nullable=True)  # Nome do arquivo, se aplicável
     file_size = Column(Integer, nullable=True)  # Tamanho do arquivo, se aplicável
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_read = Column(Boolean, default=False)
@@ -151,7 +151,7 @@ class Publicacao(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
-    conteudo = Column(String)
+    conteudo = Column(String(250))
 
     # Relacionamento com o modelo Usuario
     usuario = relationship("Usuario", back_populates="publicacoes")
@@ -160,8 +160,8 @@ class Pesquisa(Base):
     __tablename__ = "pesquisas"
 
     id = Column(Integer, primary_key=True, index=True)
-    termo_pesquisa = Column(String, index=True)
-    categoria_pesquisa = Column(String, nullable=True)  # Categoria do termo de pesquisa
+    termo_pesquisa = Column(String(250), index=True)
+    categoria_pesquisa = Column(String(250), nullable=True)  # Categoria do termo de pesquisa
     data_pesquisa = Column(DateTime, default=datetime.utcnow)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)  # ID do usuário (opcional)
 
@@ -216,7 +216,7 @@ class Produto(Base):
 
     # Relacionamento com Anuncio (um para um)
     anuncio = relationship('Anuncio', back_populates='produto')
-    slug = Column(String, unique=True, index=True)
+    slug = Column(String(250), unique=True, index=True)
 
     def gerar_slug(self):
         # Função para gerar slug baseado no nome do produto
@@ -265,10 +265,10 @@ class Transacao(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey('usuarios.id'))
-    msisdn = Column(String, nullable=False)  # Número do cliente
+    msisdn = Column(String(250), nullable=False)  # Número do cliente
     valor = Column(DECIMAL, nullable=False)   # Valor da transação
-    referencia = Column(String, nullable=False)  # Referência da transação M-Pesa
-    status = Column(String, nullable=False)  # Status da transação (sucesso, erro, etc.)
+    referencia = Column(String(250), nullable=False)  # Referência da transação M-Pesa
+    status = Column(String(250), nullable=False)  # Status da transação (sucesso, erro, etc.)
     data_hora = Column(DateTime, default=datetime.utcnow)  # Data e hora da transação
     tipo=Column(String(20))
 
