@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Produtos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .product {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        .product img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin-right: 15px;
+        }
+        .product h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+        .product p {
+            margin: 5px 0;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Lista de Produtos</h1>
+    <div id="product-list">
+        <p>Carregando produtos...</p>
+    </div>
+
+    <script>
+        // URL da API de produtos
+        const API_URL = "https://skyvendamz.up.railway.app/produtos/";
+
+        // Função para carregar os produtos
+        async function loadProducts() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar produtos: ${response.statusText}`);
+                }
+                const products = await response.json();
+                displayProducts(products);
+            } catch (error) {
+                console.error(error);
+                document.getElementById('product-list').innerHTML = `<p>Erro ao carregar produtos.</p>`;
+            }
+        }
+
+        // Função para exibir os produtos no DOM
+        function displayProducts(products) {
+            const productList = document.getElementById('product-list');
+            productList.innerHTML = ""; // Limpa o conteúdo inicial
+
+            if (products.length === 0) {
+                productList.innerHTML = `<p>Nenhum produto encontrado.</p>`;
+                return;
+            }
+
+            products.forEach(product => {
+                const productElement = document.createElement('div');
+                productElement.classList.add('product');
+
+                productElement.innerHTML = `
+                    <img src="${product.image || 'https://via.placeholder.com/100'}" alt="${product.name}">
+                    <div>
+                        <h3>${product.name}</h3>
+                        <p>Preço: ${product.price ? `MZN ${product.price.toFixed(2)}` : "Indisponível"}</p>
+                        <p>${product.description || "Sem descrição disponível."}</p>
+                    </div>
+                `;
+
+                productList.appendChild(productElement);
+            });
+        }
+
+        // Carrega os produtos ao abrir a página
+        loadProducts();
+    </script>
+</body>
+</html>

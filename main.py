@@ -27,7 +27,7 @@ app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://skyvenda-mz.vercel.app", "http://localhost", "http://127.0.0.1"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
