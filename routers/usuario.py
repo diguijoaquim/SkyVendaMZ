@@ -203,6 +203,7 @@ def read_perfil(db: Session = Depends(get_db),current_user: Usuario = Depends(ge
         "tipo":perfil.tipo,
         'perfil':perfil.foto_perfil,
         'revisado':perfil.revisao
+        
 
     }
 
