@@ -92,6 +92,4 @@ def video():
 
 Base.metadata.create_all(bind=engine)
 
-if __name__ == "__main__":
-     import uvicorn
-     uvicorn.run(app,host="192.168.1.62", port=8000) 
+
