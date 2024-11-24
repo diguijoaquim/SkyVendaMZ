@@ -189,22 +189,37 @@ def read_perfil(db: Session = Depends(get_db),current_user: Usuario = Depends(ge
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return perfil
 
+
 @router.get("/user")
-def read_perfil(db: Session = Depends(get_db),current_user: Usuario = Depends(get_current_user)):
+def read_perfil(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Retorna informações detalhadas sobre o perfil do usuário atual.
+    Inclui verificação se o usuário:
+    - Postou status.
+    - É PRO ou não.
+    """
+    # Busca o perfil do usuário atual
     perfil = db.query(Usuario).filter_by(id=current_user.id).first()
     if perfil is None:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    return {
-        "id":perfil.id,
-        'username':perfil.username,
-        'email':perfil.email,
-        'name':perfil.nome,
-        'conta_pro':perfil.conta_pro,
-        "tipo":perfil.tipo,
-        'perfil':perfil.foto_perfil,
-        'revisado':perfil.revisao
-        
+    
+    # Verifica se o usuário postou status
+    status_postado = db.query(Status).filter_by(usuario_id=perfil.id).first() is not None
 
+    # Monta a resposta com os dados do perfil
+    return {
+        "id": perfil.id,
+        "username": perfil.username,
+        "email": perfil.email,
+        "name": perfil.nome,
+        "conta_pro": perfil.conta_pro,  # Indica se a conta é PRO
+        "tipo": perfil.tipo,
+        "perfil": perfil.foto_perfil,
+        "revisado": perfil.revisao,
+        "status_postado": status_postado,  # True se o usuário postou status, False caso contrário
     }
 
 # Rotas relacionadas a usuários

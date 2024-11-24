@@ -139,8 +139,7 @@ class InfoUsuario(Base):
     sexo = Column(String(20))
     nacionalidade = Column(String(255), nullable=True)
     bairro = Column(String(255), nullable=True)
-    revisao = Column(String(255), default="não")
-    
+    revisao = Column(String(255), default="nao")
     # Relacionamento com Usuario
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
     usuario = relationship("Usuario", back_populates="info_usuario")
