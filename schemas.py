@@ -100,7 +100,7 @@ class AvaliacaoSchema(BaseModel):
     estrelas: int = Field(..., ge=1, le=5, description="Nota da avaliação (1 a 5 estrelas)")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 
