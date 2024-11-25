@@ -5,7 +5,7 @@ import pymysql
 pymysql.install_as_MySQLdb()
 
 # URL de conexão MyS
-DATABASE_URL = "mysql://root:JnFGIKioXKnFrSKyQepNhSKMqZDFuqse@junction.proxy.rlwy.net:45048/railway"
+DATABASE_URL = "mysql://root:pNtgURdvpmsdvniVGLPdxieQDonAXJzr@autorack.proxy.rlwy.net:10426/railway"
 
 # Criação do engine para MySQL
 engine = create_engine(DATABASE_URL)

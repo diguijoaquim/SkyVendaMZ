@@ -42,7 +42,7 @@
 
     <script>
         // URL da API de produtos
-        const API_URL = "https://skyvendamz.up.railway.app/produtos/";
+        const API_URL = "https://skyvendamz.up.railway.app/produto/";
 
         // Função para carregar os produtos
         async function loadProducts() {
@@ -54,8 +54,8 @@
                 const products = await response.json();
                 displayProducts(products);
             } catch (error) {
-                console.error(error);
-                document.getElementById('product-list').innerHTML = `<p>Erro ao carregar produtos.</p>`;
+                console.error("Erro ao carregar os produtos:", error);
+                document.getElementById('product-list').innerHTML = `<p>Erro ao carregar produtos: ${error.message}</p>`;
             }
         }
 
@@ -74,11 +74,11 @@
                 productElement.classList.add('product');
 
                 productElement.innerHTML = `
-                    <img src="${product.image || 'https://via.placeholder.com/100'}" alt="${product.name}">
+                    <img src="${product.image || 'https://via.placeholder.com/100'}" alt="${product.nome}">
                     <div>
                         <h3>${product.nome}</h3>
                         <p>Preço: ${product.preco ? `MZN ${product.preco.toFixed(2)}` : "Indisponível"}</p>
-                        <p>${product.descricao|| "Sem descrição disponível."}</p>
+                        <p>${product.descricao || "Sem descrição disponível."}</p>
                     </div>
                 `;
 

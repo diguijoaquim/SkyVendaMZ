@@ -17,12 +17,21 @@ from routers.pedido import router as pedido_router
 from routers.produto import router as produto_router
 from routers.usuario import router as usuario_router
 from routers.pesquisa import router as pesquisa_router
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 import logging
 
 app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Manipulador de exceção para erros de validação

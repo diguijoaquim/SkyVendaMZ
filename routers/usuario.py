@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status,Form
+from fastapi import APIRouter, Depends, HTTPException, status,Form,Body
 from sqlalchemy.orm import Session
 from models import Usuario, Transacao, Publicacao, Notificacao
 from schemas import *
@@ -494,48 +494,48 @@ def login_user(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestFo
 
 
 
-@router.post("/{avaliado_id}/avaliar/")
+@router.post("/usuarios/{avaliado_id}/avaliar/")
 def avaliar_usuario(
     avaliado_id: int,
-    estrelas: int = Body(..., embed=True, ge=1, le=5),  # Valor entre 1 e 5
+    avaliacao: AvaliacaoSchema = Body(..., description="Dados da avaliação"),  # O valor virá no corpo da requisição
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     """
-    Permite que um usuário avalie outro usuário com estrelas (1 a 5).
+    Avaliar um usuário com uma nota de 1 a 5 estrelas.
     """
-    if current_user.id == avaliado_id:
-        raise HTTPException(status_code=400, detail="Você não pode avaliar a si mesmo.")
-
-    avaliado = db.query(Usuario).filter(Usuario.id == avaliado_id).first()
-    if not avaliado:
+    # Verificar se o usuário avaliado existe
+    usuario_avaliado = db.query(Usuario).filter(Usuario.id == avaliado_id).first()
+    if not usuario_avaliado:
         raise HTTPException(status_code=404, detail="Usuário avaliado não encontrado.")
 
-    # Verifica se o usuário já avaliou o outro
+    # Verificar se o usuário autenticado está avaliando a si mesmo
+    if current_user.id == avaliado_id:
+        raise HTTPException(status_code=400, detail="Você não pode se autoavaliar.")
+
+    # Criar ou atualizar a avaliação
     avaliacao_existente = db.query(Avaliacao).filter(
         Avaliacao.avaliador_id == current_user.id,
         Avaliacao.avaliado_id == avaliado_id,
     ).first()
 
     if avaliacao_existente:
-        # Atualiza a avaliação existente
-        avaliacao_existente.estrelas = estrelas
-        avaliacao_existente.data_criacao = datetime.utcnow()
-        db.commit()
-        db.refresh(avaliacao_existente)
-        return {"message": "Avaliação atualizada com sucesso."}
+        # Atualizar a avaliação existente
+        avaliacao_existente.estrelas = avaliacao.estrelas
+        avaliacao_existente.data_avaliacao = datetime.utcnow()
+    else:
+        # Criar nova avaliação
+        nova_avaliacao = Avaliacao(
+            avaliador_id=current_user.id,
+            avaliado_id=avaliado_id,
+            estrelas=avaliacao.estrelas,
+            data_avaliacao=datetime.utcnow(),
+        )
+        db.add(nova_avaliacao)
 
-    # Cria nova avaliação
-    nova_avaliacao = Avaliacao(
-        avaliador_id=current_user.id,
-        avaliado_id=avaliado_id,
-        estrelas=estrelas,
-    )
-    db.add(nova_avaliacao)
     db.commit()
-    db.refresh(nova_avaliacao)
 
-    return {"message": "Usuário avaliado com sucesso."}
+    return {"message": "Avaliação registrada com sucesso.", "estrelas": avaliacao.estrelas}
 
 
 
