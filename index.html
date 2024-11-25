@@ -76,9 +76,9 @@
                 productElement.innerHTML = `
                     <img src="${product.image || 'https://via.placeholder.com/100'}" alt="${product.name}">
                     <div>
-                        <h3>${product.name}</h3>
-                        <p>Preço: ${product.price ? `MZN ${product.price.toFixed(2)}` : "Indisponível"}</p>
-                        <p>${product.description || "Sem descrição disponível."}</p>
+                        <h3>${product.nome}</h3>
+                        <p>Preço: ${product.preco ? `MZN ${product.preco.toFixed(2)}` : "Indisponível"}</p>
+                        <p>${product.descricao|| "Sem descrição disponível."}</p>
                     </div>
                 `;
 

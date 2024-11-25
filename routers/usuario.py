@@ -16,6 +16,7 @@ from fastapi.responses import RedirectResponse
 import requests
 import httpx
 import json
+from decimal import Decimal
 
 
 router = APIRouter(prefix="/usuario", tags=["rotas de usuarios"])
@@ -390,23 +391,89 @@ def obter_saldo(db: Session = Depends(get_db), current_user: Usuario = Depends(g
         "saldo_bonus": bonus,
         "saldo_congelado": saldo_congelado
     }
-
 @router.put("/{usuario_id}/ativar_pro/")
-def ativar_conta_pro(usuario_id: int, db: Session = Depends(get_db)):
+def ativar_conta_pro(
+    usuario_id: int, 
+    db: Session = Depends(get_db)
+):
+    """
+    Ativa a conta PRO de um usuário.
+    - Custa 1500MT, descontados do saldo principal do usuário.
+    - Registra a transação correspondente.
+    - Verifica se o usuário foi revisado antes de ativar.
+    """
+    # Busca o usuário no banco de dados
     db_usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
 
     if not db_usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    # Verifica se o usuário foi revisado
+    if not db_usuario.revisao:
+        raise HTTPException(
+            status_code=403, 
+            detail="A ativação da conta PRO está disponível apenas para usuários revisados."
+        )
+
+    # Verifica se o usuário já possui uma conta PRO ativa
     if db_usuario.conta_pro:
         raise HTTPException(status_code=400, detail="Usuário já possui uma conta PRO ativa.")
+    
+    # Verifica se o usuário tem saldo suficiente
+    custo_pro = Decimal("1500.0")
+    if db_usuario.wallet is None:
+        raise HTTPException(status_code=400, detail="Usuário não possui uma carteira associada.")
+    if db_usuario.wallet.saldo_principal < custo_pro:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente para ativar a conta PRO.")
 
+    # Atualiza a conta do usuário para PRO e desconta o valor
     db_usuario.conta_pro = True
     db_usuario.data_ativacao_pro = datetime.utcnow()
+    db_usuario.wallet.saldo_principal -= custo_pro
 
+    # Gerar dados para a transação
+    msisdn = db_usuario.username  # Substitua por `db_usuario.msisdn` se você tiver esse campo no modelo
+    referencia = f"PRO-{usuario_id}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"  # Referência única
+    status = "sucesso"  # Status da transação
+
+    # Cria e registra a transação no banco de dados
+    transacao = Transacao(
+        usuario_id=db_usuario.id,
+        msisdn=msisdn,
+        valor=custo_pro,
+        referencia=referencia,
+        status=status,
+        tipo="debito",  # Tipo de transação: débito
+        data_hora=datetime.utcnow()
+    )
+    db.add(transacao)
+
+    # Salva as alterações no banco de dados
     db.commit()
     db.refresh(db_usuario)
 
-    return {"message": "Conta PRO ativada com sucesso.", "usuario": db_usuario}
+    return {
+        "message": "Conta PRO ativada com sucesso.",
+        "usuario": {
+            "id": db_usuario.id,
+            "nome": db_usuario.nome,
+            "email": db_usuario.email,
+            "conta_pro": db_usuario.conta_pro,
+            "data_ativacao_pro": db_usuario.data_ativacao_pro,
+            "saldo_restante": float(db_usuario.wallet.saldo_principal),
+        },
+        "transacao": {
+            "id": transacao.id,
+            "usuario_id": transacao.usuario_id,
+            "msisdn": transacao.msisdn,
+            "valor": float(transacao.valor),
+            "referencia": transacao.referencia,
+            "status": transacao.status,
+            "tipo": transacao.tipo,
+            "data_hora": transacao.data_hora,
+        },
+    }
+
     
 
 # Rota para o login (gera o token com ID e tipo de usuário)
@@ -424,6 +491,52 @@ def login_user(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestFo
     # Gera o token de acesso com ID e tipo de usuário
     access_token = create_access_token(user_id=user.id, user_role=user.tipo)  # Inclui ID e tipo no token
     return {"access_token": access_token, "token_type": "bearer","id":user.id}
+
+
+
+@router.post("/{avaliado_id}/avaliar/")
+def avaliar_usuario(
+    avaliado_id: int,
+    estrelas: int = Body(..., embed=True, ge=1, le=5),  # Valor entre 1 e 5
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Permite que um usuário avalie outro usuário com estrelas (1 a 5).
+    """
+    if current_user.id == avaliado_id:
+        raise HTTPException(status_code=400, detail="Você não pode avaliar a si mesmo.")
+
+    avaliado = db.query(Usuario).filter(Usuario.id == avaliado_id).first()
+    if not avaliado:
+        raise HTTPException(status_code=404, detail="Usuário avaliado não encontrado.")
+
+    # Verifica se o usuário já avaliou o outro
+    avaliacao_existente = db.query(Avaliacao).filter(
+        Avaliacao.avaliador_id == current_user.id,
+        Avaliacao.avaliado_id == avaliado_id,
+    ).first()
+
+    if avaliacao_existente:
+        # Atualiza a avaliação existente
+        avaliacao_existente.estrelas = estrelas
+        avaliacao_existente.data_criacao = datetime.utcnow()
+        db.commit()
+        db.refresh(avaliacao_existente)
+        return {"message": "Avaliação atualizada com sucesso."}
+
+    # Cria nova avaliação
+    nova_avaliacao = Avaliacao(
+        avaliador_id=current_user.id,
+        avaliado_id=avaliado_id,
+        estrelas=estrelas,
+    )
+    db.add(nova_avaliacao)
+    db.commit()
+    db.refresh(nova_avaliacao)
+
+    return {"message": "Usuário avaliado com sucesso."}
+
 
 
 

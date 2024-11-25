@@ -37,6 +37,22 @@ class Message(Base):
 
 
 
+
+class Avaliacao(Base):
+    __tablename__ = "avaliacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    avaliador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)  # Usuário que avaliou
+    avaliado_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)   # Usuário avaliado
+    estrelas = Column(Integer, nullable=False)  # Número de estrelas (1 a 5)
+    data_criacao = Column(DateTime, default=datetime.utcnow)
+
+    # Relacionamento com o modelo Usuario
+    avaliador = relationship("Usuario", foreign_keys=[avaliador_id], back_populates="avaliacoes_feitas")
+    avaliado = relationship("Usuario", foreign_keys=[avaliado_id], back_populates="avaliacoes_recebidas")
+
+
+
 class Status(Base):
     __tablename__ = "status"
 
@@ -89,6 +105,10 @@ class Usuario(Base):
     produtos = relationship("Produto", back_populates="usuario")
     
     
+    # Relacionamento com a tabela Avaliacao
+    avaliacoes_feitas = relationship("Avaliacao", foreign_keys="[Avaliacao.avaliador_id]", back_populates="avaliador")
+    avaliacoes_recebidas = relationship("Avaliacao", foreign_keys="[Avaliacao.avaliado_id]", back_populates="avaliado")
+
     statuses = relationship("Status", back_populates="usuario")
 
     
