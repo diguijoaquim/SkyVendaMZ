@@ -494,6 +494,35 @@ def login_user(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestFo
 
 
 
+@router.get("/usuarios/{usuario_id}/avaliacoes/")
+def consultar_avaliacoes(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Consultar a média de estrelas e número de avaliações de um usuário.
+    """
+    usuario_avaliado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario_avaliado:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    # Calcular a média de estrelas
+    avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+    if not avaliacoes:
+        return {"usuario_id": usuario_id, "media_estrelas": None, "total_avaliacoes": 0}
+
+    total_avaliacoes = len(avaliacoes)
+    media_estrelas = sum([avaliacao.estrelas for avaliacao in avaliacoes]) / total_avaliacoes
+
+    return {
+        "usuario_id": usuario_id,
+        "media_estrelas": round(media_estrelas, 2),
+        "total_avaliacoes": total_avaliacoes,
+    }
+
+
+
+
 @router.post("/usuarios/{avaliado_id}/avaliar/")
 def avaliar_usuario(
     avaliado_id: int,
@@ -522,14 +551,14 @@ def avaliar_usuario(
     if avaliacao_existente:
         # Atualizar a avaliação existente
         avaliacao_existente.estrelas = avaliacao.estrelas
-        avaliacao_existente.data_avaliacao = datetime.utcnow()
+        avaliacao_existente.data_criacao  = datetime.utcnow()
     else:
         # Criar nova avaliação
         nova_avaliacao = Avaliacao(
             avaliador_id=current_user.id,
             avaliado_id=avaliado_id,
             estrelas=avaliacao.estrelas,
-            data_avaliacao=datetime.utcnow(),
+            data_criacao=datetime.utcnow(),
         )
         db.add(nova_avaliacao)
 
