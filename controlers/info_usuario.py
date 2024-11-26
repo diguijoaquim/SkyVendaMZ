@@ -39,21 +39,20 @@ def save_image(file: UploadFile, upload_dir: str) -> str:
         shutil.copyfileobj(file.file, buffer)
 
     return unique_filename
-
-def create_info_usuario_db(db: Session, info_usuario: InfoUsuarioCreate, current_user: int):
+def create_info_usuario_db(db: Session, info_usuario: InfoUsuarioCreate, current_user: Usuario):
     """
     Cria uma nova entrada de InfoUsuario no banco de dados para o usuário autenticado.
 
     Args:
         db (Session): Sessão do banco de dados.
         info_usuario (InfoUsuarioCreate): Dados do usuário.
-        current_user_id (int): ID do usuário autenticado.
+        current_user (Usuario): Instância do usuário autenticado.
 
     Returns:
         InfoUsuario: Instância do InfoUsuario criada.
     """
     # Verificar se o usuário já tem um InfoUsuario
-    if db.query(InfoUsuario).filter(InfoUsuario.usuario_id == current_user).first():
+    if db.query(InfoUsuario).filter(InfoUsuario.usuario_id == current_user.id).first():
         raise HTTPException(status_code=400, detail="Usuário já possui informações cadastradas.")
     
     # Criar InfoUsuario associado ao usuário autenticado
@@ -62,6 +61,7 @@ def create_info_usuario_db(db: Session, info_usuario: InfoUsuarioCreate, current
     db.commit()
     db.refresh(db_info_usuario)
     return db_info_usuario
+
 
 def get_info_usuarios(db: Session):
     """
@@ -158,7 +158,7 @@ def update_revisao_info_usuario(db_info_usuario, nova_revisao: str, db: Session,
     if nova_revisao == "sim":
         usuario = db.query(Usuario).filter(Usuario.id == db_info_usuario.usuario_id).first()
         if usuario:
-            usuario.revisao = True  # Define revisao como True
+            usuario.revisao = nova_revisao  # Define revisao como True
         else:
             raise HTTPException(status_code=404, detail="Usuário não encontrado.")
 

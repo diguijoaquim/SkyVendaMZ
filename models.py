@@ -100,7 +100,7 @@ class Usuario(Base):
     publicacoes = relationship("Publicacao", back_populates="usuario")
     data_cadastro =Column(DateTime, default=datetime.utcnow) 
     data_ativacao_pro = Column(DateTime, nullable=True)  # Data de ativação da conta PRO
-    revisao=Column(Boolean,nullable=True,default=False)
+    revisao=Column(String(20),nullable=True,default="nao")
     #data_cadastro=Column(DateTime, nullable=True) 
     produtos = relationship("Produto", back_populates="usuario")
     
@@ -154,12 +154,11 @@ class InfoUsuario(Base):
     distrito = Column(String(350))
     data_nascimento = Column(String(350))
     localizacao = Column(String(350))
-    estado = Column(String(350))
     contacto=Column(String(20),nullable=True)
     sexo = Column(String(20))
     nacionalidade = Column(String(255), nullable=True)
     bairro = Column(String(255), nullable=True)
-    revisao = Column(String(255), default="nao")
+    revisao = Column(String(255), default="pendente")
     # Relacionamento com Usuario
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
     usuario = relationship("Usuario", back_populates="info_usuario")

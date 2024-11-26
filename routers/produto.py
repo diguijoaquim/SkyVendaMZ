@@ -2,7 +2,7 @@ from controlers.produto import *
 from controlers.pesquisa import *
 from schemas import *
 from auth import *
-from models import Message, MessageType
+from models import Message, MessageType,Avaliacao
 from fastapi import APIRouter,Form,File,Query
 from decimal import Decimal
 
@@ -296,6 +296,15 @@ def listar_produtos(
     # Consulta o usuário apenas se `user_id` for fornecido
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
 
+    # Função auxiliar para calcular a média de estrelas do usuário
+    def calcular_media_estrelas(usuario_id: int):
+        avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+        if not avaliacoes:
+            return None  # Sem avaliações
+        soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
+        return round(soma_estrelas / len(avaliacoes), 2)
+
+    # Criar o JSON com os detalhes do produto e a média de estrelas do usuário
     return [
         {
             "id": produto.id,
@@ -321,13 +330,13 @@ def listar_produtos(
 
             "slug": produto.slug,
             "tempo": calcular_tempo_publicacao(produto.data_publicacao),
-              "usuario": {
+            "usuario": {
                 "id": produto.usuario.id,
                 "nome": produto.usuario.nome,
+                "media_estrelas": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
             },
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
             "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count()
-        
         }
         for produto in produtos_paginados
     ]

@@ -87,8 +87,6 @@ class InfoUsuarioCreate(BaseModel):
     provincia: str
     distrito: str
     data_nascimento: str
-    localizacao: str
-    estado: str
     sexo: str
     contacto: Optional[str]=None
     nacionalidade: Optional[str] = None
@@ -129,10 +127,8 @@ class InfoUsuarioUpdate(BaseModel):
     foto_bi: str
     distrito: str
     data_nascimento: str
-    localizacao: str
     avenida: Optional[str] = None
-    estado: str
-    revisao: str
+    revisao: Optional[str]=None
     bairro: Optional[str] = None
 
 

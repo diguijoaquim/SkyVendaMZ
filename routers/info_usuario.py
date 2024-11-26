@@ -3,6 +3,7 @@ from schemas import *
 from auth import *
 from fastapi import APIRouter,Form
 router=APIRouter(prefix="/info_usuario",tags=["rotas de infousuari"])
+
 @router.post("/")
 async def create_info_usuario(
     foto_retrato: UploadFile = File(...),  # Foto do rosto do usuário
@@ -11,8 +12,6 @@ async def create_info_usuario(
     provincia: str = Form(...),
     distrito: str = Form(...),
     data_nascimento: str = Form(...),
-    localizacao: str = Form(...),
-    estado: str = Form(...),
     sexo: str = Form(...),
     contacto: Optional[str] = Form(None),
     nacionalidade: Optional[str] = Form(None),
@@ -33,8 +32,6 @@ async def create_info_usuario(
         provincia=provincia,
         distrito=distrito,
         data_nascimento=data_nascimento,
-        localizacao=localizacao,
-        estado=estado,
         sexo=sexo,
         contacto=contacto,
         nacionalidade=nacionalidade,
@@ -43,7 +40,13 @@ async def create_info_usuario(
     )
 
     # Criando a entrada no banco de dados
-    db_info_usuario = create_info_usuario_db(db=db, info_usuario=info_usuario_data, current_user=current_user.id)
+    db_info_usuario = create_info_usuario_db(db=db, info_usuario=info_usuario_data, current_user=current_user)
+
+    # Atualizando o campo `revisado` no modelo Usuario para "pendente"
+    current_user.revisado = "pendente"
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
 
     return {"message": "Informações do usuário criadas com sucesso", "info_usuario": db_info_usuario}
 
