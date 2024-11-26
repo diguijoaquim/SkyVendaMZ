@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Form,Body
 from sqlalchemy.orm import Session
-from models import Usuario, Transacao, Publicacao, Notificacao
+from models import Usuario, Transacao, Publicacao, Notificacao,Seguidor
 from schemas import *
 from database import SessionLocal
 from fastapi.security import OAuth2PasswordRequestForm
@@ -190,7 +190,6 @@ def read_perfil(db: Session = Depends(get_db),current_user: Usuario = Depends(ge
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return perfil
 
-
 @router.get("/user")
 def read_perfil(
     db: Session = Depends(get_db),
@@ -201,6 +200,7 @@ def read_perfil(
     Inclui verificação se o usuário:
     - Postou status.
     - É PRO ou não.
+    - Total de seguidores com usernames.
     """
     # Busca o perfil do usuário atual
     perfil = db.query(Usuario).filter_by(id=current_user.id).first()
@@ -209,6 +209,16 @@ def read_perfil(
     
     # Verifica se o usuário postou status
     status_postado = db.query(Status).filter_by(usuario_id=perfil.id).first() is not None
+
+    # Busca os seguidores
+    seguidores = db.query(Seguidor).filter_by(usuario_id=perfil.id).all()
+    total_seguidores = len(seguidores)
+
+    # Adiciona informações dos seguidores (ID e username)
+    seguidores_info = [
+        {"id": seguidor.seguidor.id, "username": seguidor.seguidor.username} 
+        for seguidor in seguidores
+    ]
 
     # Monta a resposta com os dados do perfil
     return {
@@ -220,7 +230,9 @@ def read_perfil(
         "tipo": perfil.tipo,
         "perfil": perfil.foto_perfil,
         "revisado": perfil.revisao,
-        "status_postado": status_postado,  # True se o usuário postou status, False caso contrário
+        "status_postado": status_postado,
+        "total_seguidores": total_seguidores,
+        "seguidores": seguidores_info
     }
 
 # Rotas relacionadas a usuários
