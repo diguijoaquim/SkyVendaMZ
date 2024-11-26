@@ -15,4 +15,4 @@ aiofiles
 bcrypt
 pymysql
 mysql-connector-python
-psycopg2s
+psycopg2
