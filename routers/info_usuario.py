@@ -2,7 +2,10 @@ from controlers.info_usuario import *
 from schemas import *
 from auth import *
 from fastapi import APIRouter,Form
-router=APIRouter(prefix="/info_usuario",tags=["rotas de infousuari"])
+
+
+
+router=APIRouter(prefix="/info_usuario",tags=["rotas de infousuario"])
 
 @router.post("/")
 async def create_info_usuario(
@@ -43,10 +46,12 @@ async def create_info_usuario(
     db_info_usuario = create_info_usuario_db(db=db, info_usuario=info_usuario_data, current_user=current_user)
 
     # Atualizando o campo `revisado` no modelo Usuario para "pendente"
-    current_user.revisado = "pendente"
-    db.add(current_user)
-    db.commit()
-    db.refresh(current_user)
+    usuario = db.query(Usuario).filter(Usuario.id == current_user.id).first()
+    if usuario:
+        usuario.revisao = "pendente"
+        db.add(usuario)
+        db.commit()
+        db.refresh(usuario)
 
     return {"message": "Informações do usuário criadas com sucesso", "info_usuario": db_info_usuario}
 

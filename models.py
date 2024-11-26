@@ -193,7 +193,7 @@ class Comentario(Base):
     CustomerID = Column(Integer, ForeignKey("usuarios.id"))
     comentario = Column(Text)
     data_comentario = Column(DateTime)
-    avaliacao = Column(Integer, nullable=True)
+    
 
 class DenunciaProduto(Base):
     __tablename__ = "denunciaProduto"
@@ -299,7 +299,7 @@ class Notificacao(Base):
     usuario_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False)
     mensagem = Column(String(255), nullable=False)
     data = Column(DateTime, default=datetime.utcnow)
-
+    estado=Column(String(10),default="nao")
     usuario = relationship("Usuario", back_populates="notificacoes")
 
 class Pedido(Base):
