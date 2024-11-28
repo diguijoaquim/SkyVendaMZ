@@ -59,7 +59,7 @@ class Status(Base):
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
     conteudo = Column(Text, nullable=True)
-    imagem_url = Column(String(255), nullable=True)
+    imagem_url = Column(String(250), nullable=True)
     expira_em = Column(DateTime, nullable=False)
     custo_total = Column(DECIMAL, nullable=False)
     visualizacoes = Column(Integer, default=0)  # Contador de visualizações
@@ -91,6 +91,7 @@ class Usuario(Base):
     tipo = Column(String(255), nullable=True,default="cliente")
     # saldo = Column(Float, default=0.0)  # Removido: o saldo agora está na tabela Wallet
     foto_perfil = Column(String(50), nullable=True)
+    foto_capa = Column(String(50), nullable=True)
     ativo = Column(Boolean, default=True)
     conta_pro = Column(Boolean, default=False)  # Indica se o usuário tem uma conta PRO
     limite_diario_publicacoes = Column(Integer, default=5)  # Limite de publicações diárias para usuários PRO
@@ -224,6 +225,7 @@ class Produto(Base):
     categoria = Column(String(350))
     detalhes = Column(String(1000))
     tipo = Column(String(350))
+    preco_promocional = Column(Float, nullable=True)
     visualizacoes = Column(Integer, default=0)
     ativo = Column(Boolean, default=True)
     CustomerID = Column(Integer, ForeignKey("usuarios.id"))
@@ -235,6 +237,17 @@ class Produto(Base):
     # Relacionamento com Anuncio (um para um)
     anuncio = relationship('Anuncio', back_populates='produto')
     slug = Column(String(250), unique=True, index=True)
+    
+    # Novos campos
+    negociavel = Column(Boolean, default=False)  # Indica se o produto é negociável
+    promocao = Column(Boolean, default=False)  # Indica se o produto está em promoção
+    data_promocao = Column(DateTime, nullable=True)  # Data de início da promoção
+    custo_promocao = Column(DECIMAL, default=0.00)  # Custo acumulado da promoção
+    
+    def calcular_custo_promocao(self):
+        if self.promocao and self.data_promocao:
+            dias_em_promocao = (datetime.utcnow() - self.data_promocao).days
+            self.custo_promocao = dias_em_promocao * 10
 
     def gerar_slug(self):
         # Função para gerar slug baseado no nome do produto

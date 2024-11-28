@@ -265,13 +265,16 @@ def listar_publicacoes(db: Session = Depends(get_db)):
     
     return publicacoes
 
-
 @router.post("/{usuario_id}/seguir")
-def seguir_usuario_route(usuario_id: int, db: Session = Depends(get_db),seguidor: Usuario = Depends(get_current_user)):
-    # Chama a função que implementa a lógica de seguir um usuário
+def seguir_usuario_route(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    seguidor: Usuario = Depends(get_current_user)
+):
+    # Chama a função que implementa a lógica de seguir ou deixar de seguir
     resultado = seguir_usuario(db, usuario_id, seguidor.id)
-    
     return resultado
+
 
 
 @router.get("/usuarios/{usuario_id}/seguindo")

@@ -16,6 +16,7 @@ from decimal import Decimal
 from unidecode import unidecode
 from slugify import slugify
 
+
 PRODUCT_UPLOAD_DIR = "uploads/produto"
 STATUS_UPLOAD_DIR= "uploads/status"
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
@@ -116,7 +117,6 @@ def get_produtos_promovidos(db: Session):
 
 
 
-
 def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int):
     # Verificar se o seguidor e o usuário existem
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
@@ -125,25 +125,31 @@ def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int):
     if not usuario or not seguidor:
         raise HTTPException(status_code=404, detail="Usuário ou seguidor não encontrado.")
     
-    
     if usuario_id == seguidor_id:
-         raise HTTPException(status_code=400, detail="voce nao pode se seguir")
+        raise HTTPException(status_code=400, detail="Você não pode seguir a si mesmo.")
+
     # Verificar se já está seguindo
-    ja_seguindo = db.query(Seguidor).filter(Seguidor.usuario_id == usuario_id, Seguidor.seguidor_id == seguidor_id).first()
+    seguimento_existente = db.query(Seguidor).filter(
+        Seguidor.usuario_id == usuario_id,
+        Seguidor.seguidor_id == seguidor_id
+    ).first()
 
-    if ja_seguindo:
-        raise HTTPException(status_code=400, detail="Já está seguindo esse usuário.")
-    
-    # Criar novo registro de seguidor
-    novo_seguidor = Seguidor(usuario_id=usuario_id, seguidor_id=seguidor_id)
-    db.add(novo_seguidor)
-    db.commit()
+    if seguimento_existente:
+        # Deixar de seguir
+        db.delete(seguimento_existente)
+        db.commit()
+        return {"mensagem": f"Você deixou de seguir {usuario.nome}."}
+    else:
+        # Seguir
+        novo_seguidor = Seguidor(usuario_id=usuario_id, seguidor_id=seguidor_id)
+        db.add(novo_seguidor)
+        db.commit()
 
-    # Enviar notificação para o usuário que está sendo seguido
-    mensagem = f"{seguidor.nome} começou a seguir você!"  # Mensagem personalizada
-    enviar_notificacao(db, usuario_id, mensagem)
+        # Enviar notificação para o usuário que está sendo seguido
+        mensagem = f"{seguidor.nome} começou a seguir você!"
+        enviar_notificacao(db, usuario_id, mensagem)
 
-    return {"mensagem": f"Agora você está seguindo {usuario.nome}!"}
+        return {"mensagem": f"Agora você está seguindo {usuario.nome}!"}
 
   
 def calcular_tempo_publicacao(data_publicacao):
@@ -591,7 +597,7 @@ def promover_produto(produto_id: int, dias: int, db: Session, usuario_id: int, t
         raise HTTPException(status_code=400, detail="Saldo insuficiente para promover o produto")
 
     # Descontar o saldo do usuário
-    usuario.saldo -= custo_promocao
+    usuario.wallet -= custo_promocao
     db.commit()
 
     # Criar o anúncio vinculado ao produto

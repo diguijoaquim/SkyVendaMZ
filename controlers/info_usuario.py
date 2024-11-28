@@ -131,8 +131,7 @@ def enviar_notificacao(db: Session, usuario_id: int, mensagem: str):
     db.commit()
     db.refresh(notificacao)
     return notificacao
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
+
 
 def update_revisao_info_usuario(db_info_usuario, nova_revisao: str, db: Session, motivo: str = None):
     """

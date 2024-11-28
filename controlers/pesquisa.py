@@ -47,7 +47,6 @@ def executar_pesquisa_avancada(
         query = query.filter(
             or_(
                 Produto.nome.ilike(f"%{palavra}%"),
-                Produto.preco.ilike(f"%{palavra}%"),
                 Produto.descricao.ilike(f"%{palavra}%"),
                 Produto.categoria.ilike(f"%{palavra}%"),
                 Produto.detalhes.ilike(f"%{palavra}%"),

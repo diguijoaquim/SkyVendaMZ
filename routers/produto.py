@@ -189,6 +189,128 @@ def read_produto(slug: str, db: Session = Depends(get_db)):
     
     return db_produto
 
+
+
+@router.put("/{produto_id}/negociavel")
+def atualizar_negociabilidade(
+    produto_id: int,
+    negociavel: bool,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    produto = db.query(Produto).filter_by(id=produto_id, CustomerID=current_user.id).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado ou não pertence a você")
+    
+    produto.negociavel = negociavel
+    db.commit()
+
+    return {"message": f"O produto {produto.nome} foi atualizado para {'negociável' if negociavel else 'não negociável'}"}
+@router.put("/{produto_id}/promocao")
+def marcar_promocao(
+    produto_id: int,
+    dias_promocao: int,
+    preco_promocional: float,  # Novo preço promocional
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Coloca um produto em promoção, define um preço promocional e deduz o custo da promoção do saldo do usuário.
+    """
+    # Buscar o produto e verificar se pertence ao usuário
+    produto = db.query(Produto).filter(
+        Produto.id == produto_id,
+        Produto.CustomerID == current_user.id  # Certifique-se de usar 'usuario_id' ao invés de 'usuario'
+    ).first()
+
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado ou não pertence a você.")
+    
+    # Verificar se o produto já está em promoção
+    if produto.promocao:
+        raise HTTPException(status_code=400, detail="Este produto já está em promoção.")
+
+    # Validar o preço promocional
+    if preco_promocional >= produto.preco:
+        raise HTTPException(status_code=400, detail="O preço promocional deve ser menor que o preço original.")
+    
+    # Cálculo do custo da promoção
+    custo_total = dias_promocao * 10
+
+    # Buscar a carteira do usuário
+    carteira = db.query(Wallet).filter(Wallet.usuario_id == current_user.id).first()
+    if not carteira:
+        raise HTTPException(status_code=404, detail="Carteira não encontrada.")
+
+    # Verificar se o saldo é suficiente
+    if carteira.saldo_principal < custo_total:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente para colocar o produto em promoção.")
+    
+    # Atualizar o produto para promoção
+    produto.promocao = True
+    produto.preco_promocional = preco_promocional  # Define o novo preço promocional
+    produto.data_promocao = datetime.utcnow()
+    produto.dias_promocao = dias_promocao
+
+    # Deduzir o saldo da carteira
+    carteira.saldo_principal -= custo_total
+
+    # Salvar alterações no banco
+    db.commit()
+
+    return {
+        "message": f"O produto '{produto.nome}' foi colocado em promoção por {dias_promocao} dias.",
+        "preco_promocional": preco_promocional
+    }
+
+
+
+@router.get("/produtos/promocao")
+def listar_produtos_em_promocao(
+    db: Session = Depends(get_db),
+    limite: int = 10,  # Número máximo de produtos a serem retornados
+    pagina: int = 1  # Página atual para a paginação
+):
+    """
+    Retorna a lista de produtos em promoção.
+    """
+    # Cálculo de offset para paginação
+    offset = (pagina - 1) * limite
+
+    # Buscar os produtos em promoção no banco de dados
+    produtos = (
+        db.query(Produto)
+        .filter(Produto.promocao == True)
+        .order_by(Produto.data_promocao.desc())  # Ordenar pela data de promoção
+        .limit(limite)
+        .offset(offset)
+        .all()
+    )
+
+    # Verificar se existem produtos em promoção
+    if not produtos:
+        raise HTTPException(status_code=404, detail="Nenhum produto em promoção encontrado.")
+
+    # Retornar os produtos com as informações relevantes
+    return {
+        "total": len(produtos),
+        "pagina": pagina,
+        "limite": limite,
+        "produtos": [
+            {
+                "id": produto.id,
+                "nome": produto.nome,
+                "preco": produto.preco,
+                "preco_promocional": produto.preco_promocional,
+                "usuario_id": produto.usuario_id,
+                "data_promocao": produto.data_promocao,
+                "dias_restantes": max(0, (produto.dias_promocao or 0) - (datetime.utcnow() - produto.data_promocao).days)
+            }
+            for produto in produtos
+        ]
+    }
+
+
 @router.get("/detalhes/{slug}")
 def produto_detalhado(slug: str, db: Session = Depends(get_db)):
     return get_produto_detalhado(db, slug)
