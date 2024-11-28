@@ -8,97 +8,135 @@ from models import Produto, Usuario, InfoUsuario,Comentario,Transacao,produto_li
 from schemas import ProdutoCreate, ProdutoUpdate
 from datetime import datetime, timedelta
 from sqlalchemy import func
-
+from PIL import Image
 from controlers.pedido import enviar_notificacao
 from sqlalchemy.future import select
 import random
 from decimal import Decimal
 from unidecode import unidecode
 from slugify import slugify
-
+from PIL import Image
+import shutil
 
 PRODUCT_UPLOAD_DIR = "uploads/produto"
 STATUS_UPLOAD_DIR= "uploads/status"
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 
-def save_image(file: UploadFile, upload_dir: str) -> str:
+def save_image(file: UploadFile, upload_dir: str, max_size: tuple = (300, 300)) -> str:
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="O arquivo enviado não é uma imagem válida.")
     
-    file_extension = file.filename.split(".")[-1]
+    file_extension = file.filename.split(".")[-1].lower()
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
     file_path = os.path.join(upload_dir, unique_filename)
     
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Abrir a imagem para redimensionamento
+    try:
+        with Image.open(file.file) as img:
+            img = img.convert("RGB")  # Converte para RGB se necessário
+            img.thumbnail(max_size)  # Redimensiona mantendo a proporção
+            img.save(file_path, format=file_extension.upper() if file_extension != "jpg" else "JPEG", quality=85)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao processar a imagem: {str(e)}")
     
     return unique_filename
 
 def save_images(files: List[UploadFile], upload_dir: str) -> List[str]:
     return [save_image(file, upload_dir) for file in files]
 
-
 LIMITE_DIARIO = 3
 VALOR_PARA_PUBLICAR = 25.0
-def create_produto_db_with_image(
+
+def create_produto_db_with_image( 
     db: Session, 
     produto: ProdutoCreate, 
     files: List[UploadFile],  
     user_id: int,
     extra_files: List[UploadFile]
 ):
-    # Verifica se o usuário existe e obtem suas informações
+    # Verifica se o usuário existe
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
     
-    # Verifica se o usuário está revisado
+    # Verifica se o usuário passou pela revisão
     info_usuario = db.query(InfoUsuario).filter(InfoUsuario.usuario_id == user_id).first()
-    if not info_usuario or info_usuario.revisao != "sim":
+    if not info_usuario:
+        raise HTTPException(status_code=404, detail="Informações do usuário não encontradas.")
+    
+    if info_usuario.revisao != "sim":
         raise HTTPException(status_code=403, detail="Usuário não passou pela revisão e não pode publicar produtos.")
     
-    # Verifica a expiração da conta PRO
+    # Verifica se as imagens foram enviadas
+    if not files:
+        raise HTTPException(status_code=400, detail="Nenhuma imagem foi enviada.")
+    
+    # Verifica se a conta PRO do usuário expirou
     usuario.verificar_expiracao_pro()
     
-    hoje = datetime.utcnow().date()  # Data de hoje (UTC)
+    # Verifica quantos produtos o usuário já publicou hoje
+    hoje = datetime.utcnow().date()  # Considera a data UTC
+    produtos_hoje = db.query(Produto).filter(
+        Produto.CustomerID == user_id,
+        Produto.data_publicacao >= hoje
+    ).count()
     
-    # Se o usuário é não-PRO, aplica o limite diário
-    if not usuario.conta_pro:
-        produtos_hoje = db.query(Produto).filter(
-            Produto.CustomerID == user_id,
-            Produto.data_publicacao >= hoje
-        ).count()
-        
-        if produtos_hoje >= usuario.limite_diario_publicacoes:
-            wallet = db.query(Wallet).filter(Wallet.usuario_id == user_id).first()
-            if not wallet or wallet.saldo_principal < VALOR_PARA_PUBLICAR:
-                raise HTTPException(status_code=403, detail="Saldo insuficiente para publicação adicional.")
-            
-            # Deduz o valor de publicação do saldo principal
-            wallet.saldo_principal -= Decimal(VALOR_PARA_PUBLICAR)
-            transacao = Transacao(usuario_id=user_id, msisdn=usuario.username, tipo="saida", valor=VALOR_PARA_PUBLICAR, referencia="Lançamento de produto", status="sucesso")
-            db.add(transacao)
+    LIMITE_DIARIO = 3  # Limite diário de publicações para contas PRO
+    VALOR_PARA_PUBLICAR = 10.0  # Valor necessário para publicar se o limite diário for atingido
+    
+    # Obter a carteira do usuário
+    wallet = db.query(Wallet).filter(Wallet.usuario_id == user_id).first()
+    if not wallet:
+            wallet = Wallet(usuario_id=usuario.id, saldo_principal=0)  # Inicializa com saldo 0
+            db.add(wallet)
             db.commit()
-
-    # Salvar o produto e as imagens
+            db.refresh(wallet)
+    
+    # Se o usuário é PRO e não atingiu o limite diário, permite a publicação sem custo
+    if usuario.conta_pro:
+        if produtos_hoje >= LIMITE_DIARIO:
+            raise HTTPException(status_code=403, detail="Você atingiu o limite diário de publicações para sua conta PRO.")
+    else:
+        # Se o usuário não é PRO, verifica se ele tem saldo suficiente para publicar
+        if produtos_hoje >= LIMITE_DIARIO:
+            # Se o saldo principal for suficiente, deduz o valor do saldo
+            if wallet.saldo_principal >= VALOR_PARA_PUBLICAR:
+                wallet.saldo_principal -= VALOR_PARA_PUBLICAR
+                transacao = Transacao(usuario_id=usuario.id, msisdn=usuario.username,tipo="saida", valor=VALOR_PARA_PUBLICAR, referencia="lacamento de produto", status="sucesso")
+                db.add(transacao)
+                db.commit()    
+            elif wallet.saldo_principal + wallet.bonus >= VALOR_PARA_PUBLICAR:
+                # Se não houver saldo principal, mas houver bônus, deduz do bônus
+                wallet.bonus -= VALOR_PARA_PUBLICAR - wallet.saldo_principal
+                wallet.saldo_principal = 0  # Define saldo principal para 0
+            else:
+                raise HTTPException(status_code=403, detail="Saldo insuficiente para publicar o produto.")
+    
+    # Salva a primeira imagem como capa
     capa_filename = save_image(files[0], PRODUCT_UPLOAD_DIR)
+    
+    # Salva as fotos adicionais
     image_filenames = save_images(extra_files, PRODUCT_UPLOAD_DIR)
     
+    # Cria o produto no banco de dados
     db_produto = Produto(
         **produto.dict(), 
         capa=capa_filename, 
-        fotos=",".join(image_filenames),  
-        data_publicacao=datetime.utcnow()
+        fotos=",".join(image_filenames),  # Armazena as fotos adicionais
+        data_publicacao=datetime.utcnow()  # Adiciona a data de publicação
     )
     
     db.add(db_produto)
+    db.commit()  # Commit para salvar o produto
+    
+    # Commit para atualizar o saldo do usuário
     db.commit()
     
-    enviar_notificacoes_para_seguidores(db, usuario.id, f"{usuario.nome} publicou um novo produto!")
+    # Envia notificação de que o usuário publicou um produto
+    mensagem_notificacao = f"{usuario.nome} publicou um novo produto!"
+    enviar_notificacoes_para_seguidores(db, usuario.id, mensagem_notificacao)
     
     return db_produto
-
-
 
 
 def get_produtos_promovidos(db: Session):

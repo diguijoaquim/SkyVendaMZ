@@ -93,8 +93,6 @@ async def get_produto(produto_id: int, db: Session = Depends(get_db)):
     }
 
 
-
-
 @router.post("/publicar")
 async def create_produto(
     nome: str = Form(...),
@@ -155,6 +153,7 @@ async def create_produto(
     print("Produto cadastrado com sucesso:", db_produto)
 
     return {"message": "Produto criado com sucesso", "produto": db_produto}
+
 
 
 @router.get("/pesquisa/")
@@ -310,10 +309,76 @@ def listar_produtos_em_promocao(
         ]
     }
 
+@router.get("/detalhe/{slug}")
+def obter_produto(
+    slug: str,
+    db: Session = Depends(get_db),
+    user_id: int = Query(None, description="ID opcional do usuário para verificar likes"),
+):
+    """
+    Retorna os detalhes de um produto específico baseado no `slug` e aumenta as visualizações.
+    Se `user_id` for fornecido, indica se o usuário deu like no produto.
 
-@router.get("/detalhes/{slug}")
-def produto_detalhado(slug: str, db: Session = Depends(get_db)):
-    return get_produto_detalhado(db, slug)
+    Args:
+        slug (str): Slug do produto para buscar o produto.
+        user_id (int): ID opcional do usuário para verificar os likes.
+
+    Returns:
+        dict: Detalhes do produto.
+    """
+    # Buscar o produto pelo slug
+    produto = db.query(Produto).filter(Produto.slug == slug).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    
+    # Aumentar as visualizações do produto
+    produto.visualizacoes += 1
+    db.commit()
+    db.refresh(produto)
+
+    # Verificar se o usuário deu like
+    usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
+
+    # Função auxiliar para calcular a média de estrelas do vendedor
+    def calcular_media_estrelas(usuario_id: int):
+        avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+        if not avaliacoes:
+            return None  # Sem avaliações
+        soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
+        return round(soma_estrelas / len(avaliacoes), 2)
+
+    # Retorna os detalhes do produto
+    return {
+        "id": produto.id,
+        "nome": produto.nome,
+        "capa": produto.capa,
+        "fotos": produto.fotos,
+        "preco": float(produto.preco),
+        "quantidade_estoque": produto.quantidade_estoque,
+        "estado": produto.estado,
+        "provincia": produto.provincia,
+        "distrito": produto.distrito,
+        "localizacao": produto.localizacao,
+        "revisao": produto.revisao,
+        "disponibilidade": produto.disponiblidade,
+        "descricao": produto.descricao,
+        "categoria": produto.categoria,
+        "detalhes": produto.detalhes,
+        "tipo": produto.tipo,
+        "view": produto.visualizacoes,
+        "ativo": produto.ativo,
+        "CustomerID": produto.CustomerID,
+        "likes": produto.likes,
+        "slug": produto.slug,
+        "tempo": calcular_tempo_publicacao(produto.data_publicacao),
+        "usuario": {
+            "id": produto.usuario.id,
+            "nome": produto.usuario.nome,
+            "media_estrelas": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
+        },
+        "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
+        "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count(),
+    }
 
 @router.get("/produto/{produto_id}/likes")
 def produto_likes(produto_id: int, db: Session = Depends(get_db)):

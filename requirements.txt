@@ -16,3 +16,4 @@ bcrypt
 pymysql
 mysql-connector-python
 psycopg2
+pillow
