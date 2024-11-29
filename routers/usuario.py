@@ -30,7 +30,7 @@ url = "https://api.sandbox.vm.co.mz:18352/ipg/v1x/c2bPayment/singleStage/"
 #google
 GOOGLE_CLIENT_ID ="447649377867-1ff1uie6eeds2u3cq5er9virar9vden5.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET = "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"
-GOOGLE_REDIRECT_URI = "http://localhost:5000/auth/callback"
+GOOGLE_REDIRECT_URI = "https://skyvendamz.up.railway.app/auth/callback"
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URI = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -179,8 +179,9 @@ async def google_auth_callback(code: str, db: Session = Depends(get_db)):
         access_token = create_access_token(data={"sub": str(user.id)})
 
         # Redireciona para a página de produtos
-        redirect_url = f"http://localhost:5000/auth/callback"
+        redirect_url = "https://skyvenda-mz.vercel.app"
         return RedirectResponse(url=redirect_url)
+        # URL da sua aplicação frontend
 
 @router.get("/perfil")
 def read_perfil(db: Session = Depends(get_db),current_user: Usuario = Depends(get_current_user)):
