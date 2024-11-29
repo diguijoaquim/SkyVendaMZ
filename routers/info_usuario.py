@@ -55,7 +55,7 @@ async def create_info_usuario(
 
     return {"message": "Informações do usuário criadas com sucesso", "info_usuario": db_info_usuario}
 
-@router.post("/{info_usuario_id}/perfil/")
+@router.put("/perfil")
 async def upload_profile_picture(
     perfil: Usuario = Depends(get_current_user),
     file: UploadFile = File(...),
