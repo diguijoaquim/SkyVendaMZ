@@ -219,7 +219,7 @@ class ComentarioBase(BaseModel):
     CustomerID: int
     comentario: str
     data_comentario: datetime
-    avaliacao: Optional[int] = None
+   
 
 class ComentarioCreate(ComentarioBase):
     pass
