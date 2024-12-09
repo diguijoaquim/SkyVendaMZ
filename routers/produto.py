@@ -473,6 +473,7 @@ def listar_produtos(
         List[dict]: Lista paginada com detalhes específicos dos produtos e se o usuário deu like, se `user_id` for fornecido.
     """
     produtos = db.query(Produto).all()
+    
 
     if not produtos:
         raise HTTPException(status_code=404, detail="Nenhum produto encontrado.")
@@ -524,7 +525,8 @@ def listar_produtos(
                 "media_estrelas": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
             },
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
-            "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count()
+            "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count(),
+            "comments": db.query(Comentario).filter(Comentario.produtoID == produto.id).all()
         }
         for produto in produtos_paginados
     ]
