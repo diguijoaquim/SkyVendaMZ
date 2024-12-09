@@ -520,6 +520,7 @@ def listar_produtos(
             "usuario": {
                 "id": produto.usuario.id,
                 "nome": produto.usuario.nome,
+                "foto":produto.usuario.foto_perfil,
                 "media_estrelas": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
             },
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
