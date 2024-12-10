@@ -184,19 +184,3 @@ def categorias_preferidas_por_usuario(db: Session, usuario_id: int):
 
     return [{"categoria": c[0], "total_interacoes": c[1]} for c in categorias]
 
-
-def categorias_mais_populares(db: Session):
-    """
-    Retorna as categorias mais interagidas no geral.
-    """
-    categorias = (
-        db.query(
-            Log.detalhes["categoria"].cast(String).label("categoria"),  # Corrigido aqui
-            func.count(Log.id).label("total_interacoes"),
-        )
-        .group_by(Log.detalhes["categoria"].cast(String))  # Corrigido aqui
-        .order_by(func.count(Log.id).desc())
-        .all()
-    )
-
-    return [{"categoria": c[0], "total_interacoes": c[1]} for c in categorias]

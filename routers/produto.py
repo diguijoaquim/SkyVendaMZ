@@ -609,3 +609,13 @@ def responder_status(
     db.commit()
 
     return {"message": "Resposta enviada com sucesso", "message_id": nova_mensagem.id}
+
+@router.get("/categorias/populares", summary="Categorias mais populares no geral")
+def obter_categorias_populares(db: Session = Depends(get_db)):
+    """
+    Retorna as categorias mais interagidas no geral.
+    """
+    categorias = categorias_mais_populares(db)
+    if not categorias:
+        raise HTTPException(status_code=404, detail="Nenhuma interação encontrada no sistema.")
+    return categorias
