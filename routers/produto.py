@@ -527,7 +527,7 @@ def listar_produtos(
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
             "comments": [
                 {
-                    "id": comentario.comentarioID,
+                    "id": comentario.id,
                     "text": comentario.comentario,
                     "date": comentario.data_comentario,
                     "user": {
