@@ -46,7 +46,7 @@ def save_images(files: List[UploadFile], upload_dir: str) -> List[str]:
     return [save_image(file, upload_dir) for file in files]
 
 LIMITE_DIARIO = 3
-VALOR_PARA_PUBLICAR = 25.0
+VALOR_PARA_PUBLICAR = Decimal("9.0")
 
 def create_produto_db_with_image( 
     db: Session, 
@@ -83,7 +83,7 @@ def create_produto_db_with_image(
     ).count()
     
     LIMITE_DIARIO = 3  # Limite diário de publicações para contas PRO
-    VALOR_PARA_PUBLICAR = 10.0  # Valor necessário para publicar se o limite diário for atingido
+    VALOR_PARA_PUBLICAR = Decimal("9.0")  # Valor necessário para publicar se o limite diário for atingido
     
     # Obter a carteira do usuário
     wallet = db.query(Wallet).filter(Wallet.usuario_id == user_id).first()
@@ -102,7 +102,8 @@ def create_produto_db_with_image(
         if produtos_hoje >= LIMITE_DIARIO:
             # Se o saldo principal for suficiente, deduz o valor do saldo
             if wallet.saldo_principal >= VALOR_PARA_PUBLICAR:
-                wallet.saldo_principal -= VALOR_PARA_PUBLICAR
+                wallet.saldo_principal -= Decimal(VALOR_PARA_PUBLICAR)
+
                 transacao = Transacao(usuario_id=usuario.id, msisdn=usuario.username,tipo="saida", valor=VALOR_PARA_PUBLICAR, referencia="lacamento de produto", status="sucesso")
                 db.add(transacao)
                 db.commit()    
