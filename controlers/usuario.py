@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import Usuario,InfoUsuario,Status
+from models import Usuario,InfoUsuario,Status,Log
 from schemas import UsuarioCreate, UsuarioUpdate
 import smtplib
 from email.mime.text import MIMEText
@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from email.mime.multipart import MIMEMultipart
 import random
 import string
+from sqlalchemy import func
 from datetime import datetime,timedelta
 
 def create_usuario_db(db: Session, usuario: UsuarioCreate):
@@ -163,3 +164,44 @@ def get_perfil(db: Session, usuario_id: int):
              
         }
     return None
+
+
+
+def categorias_mais_populares(db: Session):
+    """
+    Retorna as categorias mais interagidas no geral.
+    """
+   
+
+    categorias = (
+        db.query(
+            Log.detalhes["categoria"].astext.label("categoria"),
+            func.count(Log.id).label("total_interacoes"),
+        )
+        .group_by(Log.detalhes["categoria"].astext)
+        .order_by(func.count(Log.id).desc())
+        .all()
+    )
+
+    return [{"categoria": c[0], "total_interacoes": c[1]} for c in categorias]
+
+
+def categorias_preferidas_por_usuario(db: Session, usuario_id: int):
+    """
+    Retorna as categorias mais interagidas por um usuário.
+    """
+    
+
+    # Consulta logs agrupados por categoria
+    categorias = (
+        db.query(
+            Log.detalhes["categoria"].astext.label("categoria"),
+            func.count(Log.id).label("total_interacoes"),
+        )
+        .filter(Log.usuario_id == usuario_id)
+        .group_by(Log.detalhes["categoria"].astext)
+        .order_by(func.count(Log.id).desc())
+        .all()
+    )
+
+    return [{"categoria": c[0], "total_interacoes": c[1]} for c in categorias]

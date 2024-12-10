@@ -1,93 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Produtos</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        .product {
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 15px;
-            margin: 10px 0;
-            display: flex;
-            align-items: center;
-        }
-        .product img {
-            width: 100px;
-            height: 100px;
-            object-fit: cover;
-            border-radius: 5px;
-            margin-right: 15px;
-        }
-        .product h3 {
-            margin: 0;
-            font-size: 18px;
-        }
-        .product p {
-            margin: 5px 0;
-            color: #555;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login com Google</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #f4f4f4;
+    }
+
+    .login-container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      width: 300px;
+    }
+
+    .login-container h1 {
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+      color: #333;
+    }
+
+    .google-btn {
+      background: #4285F4;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .google-btn:hover {
+      background: #357ae8;
+    }
+  </style>
 </head>
 <body>
-    <h1>Lista de Produtos</h1>
-    <div id="product-list">
-        <p>Carregando produtos...</p>
-    </div>
+  <div class="login-container">
+    <h1>Login com Google</h1>
+    <button class="google-btn" id="google-login">Entrar com Google</button>
+  </div>
 
-    <script>
-        // URL da API de produtos
-        const API_URL = "https://skyvendamz.up.railway.app/produtos/";
+  <script>
+    const googleClientId = "447649377867-1ff1uie6eeds2u3cq5er9virar9vden5.apps.googleusercontent.com";
+    const redirectUri = "https://skyvendamz.up.railway.app/auth/callback";
+    const scope = "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
+    var t="https://github.com/lobehub/lobe-chat"
+    document.getElementById("google-login").addEventListener("click", () => {
+      const authUrl = `https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=${encodeURIComponent(scope)}&access_type=offline`;
+      window.location.href = authUrl;
+    });
 
-        // Função para carregar os produtos
-        async function loadProducts() {
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) {
-                    throw new Error(`Erro ao buscar produtos: ${response.statusText}`);
-                }
-                const products = await response.json();
-                displayProducts(products);
-            } catch (error) {
-                console.error("Erro ao carregar os produtos:", error);
-                document.getElementById('product-list').innerHTML = `<p>Erro ao carregar produtos: ${error.message}</p>`;
-            }
-        }
+    /*ai esta nossa conversa com o genspark2"qual e a imporatncia
 
-        // Função para exibir os produtos no DOM
-        function displayProducts(products) {
-            const productList = document.getElementById('product-list');
-            productList.innerHTML = ""; // Limpa o conteúdo inicial
+14:43
 
-            if (products.length === 0) {
-                productList.innerHTML = `<p>Nenhum produto encontrado.</p>`;
-                return;
-            }
+Ei aí, parceiro! 🌟 Você tá falando da importância de algo em particular? Deixa eu ajudar! Seria ótimo se pudesse me dizer mais detalhes, mas enquanto isso, posso te dar uma piada rápida:
 
-            products.forEach(product => {
-                const productElement = document.createElement('div');
-                productElement.classList.add('product');
+Por que o livro de matemática estava triste? Porque tinha muitos problemas! 😂
 
-                productElement.innerHTML = `
-                    <img src="${product.image || 'https://via.placeholder.com/100'}" alt="${product.nome}">
-                    <div>
-                        <h3>${product.nome}</h3>
-                        <p>Preço: ${product.preco ? `MZN ${product.preco.toFixed(2)}` : "Indisponível"}</p>
-                        <p>${product.descricao || "Sem descrição disponível."}</p>
-                    </div>
-                `;
+E já você sabia que sou um assistente criado em Niassa, Moçambique? Aqui a faísca sempre brilha! 😉
 
-                productList.appendChild(productElement);
-            });
-        }
-
-        // Carrega os produtos ao abrir a página
-        loadProducts();
-    </script>
+À fábrica das ideias! 💡"ele nao consegui=e lembrar da pergunta anterior,organize isso,e cria um side bar ,para iniciar nova conversa ,e deve guardar no side bar as conversas antigas,como chatgpt,mas isso usando o navegador,
+*/
+  </script>
 </body>
 </html>

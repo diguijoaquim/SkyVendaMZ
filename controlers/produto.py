@@ -16,6 +16,7 @@ from decimal import Decimal
 from unidecode import unidecode
 from slugify import slugify
 from PIL import Image
+from controlers.utils import *
 import shutil
 
 PRODUCT_UPLOAD_DIR = "uploads/produto"
@@ -246,18 +247,14 @@ def get_seguidores(usuario_id: int, db: Session):
         "total_seguindo": total_seguindo,
         "seguindo": seguindo_list
     }
-
 def toggle_like_produto(db: Session, produto_slug: str, user_id: int):
-    # Verifica se o produto existe pelo slug
     produto = db.query(Produto).filter(Produto.slug == produto_slug).first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
-    
-    # Verifica se o usuário já deu like neste produto
+
     like_existente = db.query(produto_likes).filter_by(produto_id=produto.id, usuario_id=user_id).first()
 
     if like_existente:
-        # Se o like já existir, remove o like
         produto.likes -= 1
         db.execute(
             produto_likes.delete()
@@ -265,16 +262,27 @@ def toggle_like_produto(db: Session, produto_slug: str, user_id: int):
             .where(produto_likes.c.usuario_id == user_id)
         )
         message = "Like removido com sucesso!"
+        acao = "remover_like"
     else:
-        # Se o like não existir, adiciona um like
         produto.likes += 1
         db.execute(
             produto_likes.insert().values(produto_id=produto.id, usuario_id=user_id)
         )
         message = "Like adicionado com sucesso!"
-    
-    # Comita a transação
+        acao = "adicionar_like"
+
     db.commit()
+
+    # Registra a ação de like
+    # Registra a ação com a categoria
+    registrar_acao_com_categoria(
+        db=db,
+        usuario_id=user_id,
+        tipo_acao="like",
+        produto_id=produto.id,
+        entidade="Produto",
+        detalhes={"produto_id": produto.id}
+    )
 
     return {"message": message, "total_likes": produto.likes}
 
@@ -296,7 +304,7 @@ def reativar_produto(produto_id: int, current_user: Usuario, db: Session):
     # Verificar saldo do usuário
     if current_user.saldo < 25:
         raise HTTPException(status_code=400, detail="Saldo insuficiente para reativar o produto.")
-
+    
     # Descontar saldo e reativar o produto
     current_user.saldo -= 25
     produto.ativo = True
@@ -314,8 +322,7 @@ def atualizar_status_produtos(db: Session):
             produto.ativo = False
             db.commit()
 
-
-
+#Seb@$t!@oP@ULO//
 
 def gerar_slug(nome_produto: str) -> str:
     nome_sem_acento = unidecode(nome_produto)  # Remove acentos e caracteres especiais
@@ -379,7 +386,7 @@ def listar_anuncios_com_produtos(db: Session):
 
 
 
-def get_produto_detalhado(db: Session, slug: str):
+def get_produto_detalhado(db: Session, slug: str,usuario_id: Optional[int] = None):
     """
     Retorna os detalhes do produto, incluindo foto, nome, comentários, categoria, preço,
     nome do usuário que publicou, data, disponibilidade, total de likes e usuários que deram like,
@@ -404,6 +411,16 @@ def get_produto_detalhado(db: Session, slug: str):
     db.commit()
     db.refresh(produto)
     
+
+    # Registra a ação com a categoria
+    registrar_acao_com_categoria(
+        db=db,
+        usuario_id=usuario_id,
+        tipo_acao="visualizacao",
+        produto_id=produto.id,
+        entidade="Produto",
+        detalhes={"produto_id": produto.id}
+    )
     # Busca o usuário que publicou o produto
     usuario = db.query(Usuario).filter(Usuario.id == produto.CustomerID).first()
     

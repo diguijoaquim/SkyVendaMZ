@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, Table, DECIMAL,Float, Boolean,Enum,func
+from sqlalchemy import Column, Integer, String,JSON, ForeignKey, DateTime, Text, Table, DECIMAL,Float, Boolean,Enum,func
 from sqlalchemy.orm import relationship
 from database import Base,engine
 from unidecode import unidecode
@@ -79,6 +79,19 @@ produto_likes = Table(
     Column('usuario_id', Integer, ForeignKey('usuarios.id'), primary_key=True)
 )
 
+
+
+class Log(Base):
+    __tablename__ = "logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)  # Pode ser None para ações anônimas.
+    tipo_acao = Column(String, nullable=False)
+    entidade = Column(String, nullable=False)  # Ex.: Produto, Pedido.
+    detalhes = Column(JSON, nullable=True)  # Detalhes em formato JSON.
+    data_hora = Column(DateTime, default=datetime.utcnow)
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
     
@@ -91,6 +104,7 @@ class Usuario(Base):
     tipo = Column(String(255), nullable=True,default="cliente")
     # saldo = Column(Float, default=0.0)  # Removido: o saldo agora está na tabela Wallet
     foto_perfil = Column(String(50), nullable=True)
+    min_perfil = Column(String(50), nullable=True)
     foto_capa = Column(String(50), nullable=True)
     ativo = Column(Boolean, default=True)
     conta_pro = Column(Boolean, default=False)  # Indica se o usuário tem uma conta PRO
@@ -104,15 +118,13 @@ class Usuario(Base):
     revisao=Column(String(20),nullable=True,default="nao")
     #data_cadastro=Column(DateTime, nullable=True) 
     produtos = relationship("Produto", back_populates="usuario")
-    
-    
+    comentarios = relationship("Comentario", back_populates="usuario")
     # Relacionamento com a tabela Avaliacao
     avaliacoes_feitas = relationship("Avaliacao", foreign_keys="[Avaliacao.avaliador_id]", back_populates="avaliador")
     avaliacoes_recebidas = relationship("Avaliacao", foreign_keys="[Avaliacao.avaliado_id]", back_populates="avaliado")
 
     statuses = relationship("Status", back_populates="usuario")
 
-    
     # Relacionamentos para mensagens
     sent_messages = relationship("Message", foreign_keys=[Message.sender_id], back_populates="sender")
     received_messages = relationship("Message", foreign_keys=[Message.receiver_id], back_populates="receiver")
@@ -142,8 +154,6 @@ class Admin(Base):
     email = Column(String(100), unique=True, nullable=False)
     senha = Column(String(200))
 
-
-
 class InfoUsuario(Base):
     __tablename__ = "info_usuario"
     
@@ -163,7 +173,6 @@ class InfoUsuario(Base):
     # Relacionamento com Usuario
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
     usuario = relationship("Usuario", back_populates="info_usuario")
-
 
 class Publicacao(Base):
     __tablename__ = "publicacoes"
@@ -187,14 +196,6 @@ class Pesquisa(Base):
     usuario = relationship("Usuario", back_populates="pesquisas")
 
 
-class Comentario(Base):
-    __tablename__ = "comentario"
-    comentarioID = Column(Integer, primary_key=True, index=True)
-    produtoID = Column(Integer, ForeignKey("produto.id"))
-    CustomerID = Column(Integer, ForeignKey("usuarios.id"))
-    comentario = Column(Text)
-    data_comentario = Column(DateTime)
-    
 
 class DenunciaProduto(Base):
     __tablename__ = "denunciaProduto"
@@ -205,6 +206,19 @@ class DenunciaProduto(Base):
     descricao = Column(Text)
     data_denuncia = Column(DateTime)
     status = Column(String(350))
+
+class Comentario(Base):
+    __tablename__ = "comentarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    produtoID = Column(Integer, ForeignKey("produto.id"), nullable=False)  # Ajustado para "produto.id"
+    usuarioID = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    comentario = Column(String, nullable=False)
+    data_comentario = Column(DateTime, default=datetime.utcnow)
+
+    produto = relationship("Produto", back_populates="comentarios")
+    usuario = relationship("Usuario", back_populates="comentarios")
+
 
 
 class Produto(Base):
@@ -237,7 +251,8 @@ class Produto(Base):
     # Relacionamento com Anuncio (um para um)
     anuncio = relationship('Anuncio', back_populates='produto')
     slug = Column(String(250), unique=True, index=True)
-    
+        # Relacionamento com Comentarios (um para muitos)
+    comentarios = relationship("Comentario", back_populates="produto")
     # Novos campos
     negociavel = Column(Boolean, default=False)  # Indica se o produto é negociável
     promocao = Column(Boolean, default=False)  # Indica se o produto está em promoção
@@ -278,6 +293,7 @@ class Anuncio(Base):
 
     def definir_promocao(self, dias: int):
         self.expira_em = datetime.utcnow() + timedelta(days=dias)
+
 class Seguidor(Base):
     __tablename__ = "seguidores"
     

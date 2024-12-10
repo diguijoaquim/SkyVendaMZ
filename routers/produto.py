@@ -106,6 +106,7 @@ async def create_produto(
     disponiblidade: str = Form(...),
     descricao: str = Form(...),
     categoria: str = Form(...),
+    negociavel:str=Form(...),
     detalhes: str = Form(...),
     tipo: str = Form(...),
     fotos: List[UploadFile] = File(...),
@@ -133,6 +134,7 @@ async def create_produto(
         disponiblidade=disponiblidade,
         descricao=descricao,
         categoria=categoria,
+        negociavel=negociavel,
         detalhes=detalhes,
         tipo=tipo,
         CustomerID=current_user.id,  # Use o ID do usuário
@@ -451,7 +453,6 @@ def listar_anuncios(db: Session = Depends(get_db)):
 def listar_produtos_promovidos(db: Session = Depends(get_db)):
     return get_produtos_promovidos(db)
 
-
 @router.get("/")
 def listar_produtos(
     db: Session = Depends(get_db),
@@ -460,7 +461,7 @@ def listar_produtos(
     offset: int = Query(0, description="Ponto inicial para a paginação")
 ):
     """
-    Lista produtos com informações detalhadas e, se `user_id` for fornecido, indica se o usuário deu like.
+    Lista produtos com informações detalhadas, incluindo comentários e detalhes dos comentadores.
     - Prioriza produtos recentes com ordem aleatória.
     - Lista demais produtos organizados por peso.
 
@@ -470,17 +471,17 @@ def listar_produtos(
         offset (int): Índice de início da listagem para paginação.
 
     Returns:
-        List[dict]: Lista paginada com detalhes específicos dos produtos e se o usuário deu like, se `user_id` for fornecido.
+        List[dict]: Lista paginada com detalhes específicos dos produtos, comentários e comentadores.
     """
     produtos = db.query(Produto).all()
 
     if not produtos:
         raise HTTPException(status_code=404, detail="Nenhum produto encontrado.")
-    
+
     produtos_ordenados = combinar_produtos(produtos, db)
     produtos_paginados = produtos_ordenados[offset: offset + limit]
 
-    # Consulta o usuário apenas se `user_id` for fornecido
+    # Consulta o usuário apenas se user_id for fornecido
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
 
     # Função auxiliar para calcular a média de estrelas do usuário
@@ -491,42 +492,60 @@ def listar_produtos(
         soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
         return round(soma_estrelas / len(avaliacoes), 2)
 
-    # Criar o JSON com os detalhes do produto e a média de estrelas do usuário
+    # Criar o JSON com os detalhes do produto e os comentários
     return [
         {
             "id": produto.id,
-            "nome": produto.nome,
-            "capa": produto.capa,
-            "fotos": produto.fotos,
-            "preco": float(produto.preco),
-            "quantidade_estoque": produto.quantidade_estoque,
-            "estado": produto.estado,
-            "provincia": produto.provincia,
-            "distrito": produto.distrito,
-            "localizacao": produto.localizacao,
-            "revisao": produto.revisao,
-            "disponibilidade": produto.disponiblidade,
-            "descricao": produto.descricao,
-            "categoria": produto.categoria,
-            "detalhes": produto.detalhes,
-            "tipo": produto.tipo,
-            "view": produto.visualizacoes,
-            "ativo": produto.ativo,
-            "CustomerID": produto.CustomerID,
+            "title": produto.nome,
+            "thumb": produto.capa,
+            "images": produto.fotos,
+            "price": float(produto.preco),
+            "stock_quantity": produto.quantidade_estoque,
+            "state": produto.estado,
+            "province": produto.provincia,
+            "district": produto.distrito,
+            "location": produto.localizacao,
+            "review": produto.revisao,
+            "availability": produto.disponiblidade,
+            "description": produto.descricao,
+            "category": produto.categoria,
+            "details": produto.detalhes,
+            "type": produto.tipo,
+            "views": produto.visualizacoes,
+            "active": produto.ativo,
+            "customer_id": produto.CustomerID,
             "likes": produto.likes,
-
             "slug": produto.slug,
-            "tempo": calcular_tempo_publicacao(produto.data_publicacao),
-            "usuario": {
+            "time": calcular_tempo_publicacao(produto.data_publicacao),
+            "user": {
                 "id": produto.usuario.id,
-                "nome": produto.usuario.nome,
-                "media_estrelas": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
+                "name": produto.usuario.nome,
+                "avatar": produto.usuario.foto_perfil,
+                "average_stars": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
             },
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
-            "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count()
+            "comments": [
+                {
+                    "id": comentario.comentarioID,
+                    "text": comentario.comentario,
+                    "date": comentario.data_comentario,
+                    "user": {
+                        "id": comentador.id,
+                        "name": comentador.nome,
+                        "avatar": comentador.foto_perfil
+                    }
+                }
+                for comentario, comentador in (
+                    db.query(Comentario, Usuario)
+                    .join(Usuario, Usuario.id == Comentario.usuarioID)
+                    .filter(Comentario.produtoID == produto.id)
+                    .all()
+                )
+            ]
         }
         for produto in produtos_paginados
     ]
+
 
 @router.get("/usuarios/{user_id}/produtos/")
 def get_produtos_by_user(user_id: int, db: Session = Depends(get_db)):

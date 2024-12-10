@@ -8,6 +8,8 @@ from sqlalchemy import func
 from fastapi import HTTPException
 from auth import *
 
+
+
 def salvar_pesquisa(termo: str, categoria: str, db: Session, usuario_id: int = None):
     """
     Função para salvar a pesquisa do usuário no banco de dados.
@@ -29,6 +31,7 @@ def salvar_pesquisa(termo: str, categoria: str, db: Session, usuario_id: int = N
     db.refresh(pesquisa)
 
 
+# Registra a ação de pesquisa
 def executar_pesquisa_avancada(
     termo: str, 
     db: Session = Depends(get_db),
