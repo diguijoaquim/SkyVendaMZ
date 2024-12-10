@@ -7,7 +7,7 @@ router=APIRouter(prefix="/comentarios",tags=["rotas de comentario"])
 # Comentario routes
 
 
-@router.post("/comentarios/")
+@router.post("/")
 async def create_comentario(
     produto_slug: str = Form(..., description="Slug do produto para o qual o comentário será feito"),
     conteudo: str = Form(..., description="Conteúdo do comentário"),
