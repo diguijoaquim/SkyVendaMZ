@@ -106,7 +106,7 @@ async def create_produto(
     disponiblidade: str = Form(...),
     descricao: str = Form(...),
     categoria: str = Form(...),
-    negociavel:str=Form(...),
+    negociavel: Optional[str] = Form(None),
     detalhes: str = Form(...),
     tipo: str = Form(...),
     fotos: List[UploadFile] = File(...),

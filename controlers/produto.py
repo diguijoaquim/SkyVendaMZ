@@ -139,7 +139,6 @@ def create_produto_db_with_image(
     
     return db_produto
 
-
 def get_produtos_promovidos(db: Session):
     """
     Retorna todos os produtos que estão atualmente promovidos (anunciados).

@@ -86,9 +86,9 @@ class Log(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)  # Pode ser None para ações anônimas.
-    tipo_acao = Column(String, nullable=False)
-    entidade = Column(String, nullable=False)  # Ex.: Produto, Pedido.
-    detalhes = Column(JSON, nullable=True)  # Detalhes em formato JSON.
+    tipo_acao = Column(String(255), nullable=False)
+    entidade = Column(String(255), nullable=False)  # Ex.: Produto, Pedido.
+    detalhes = Column(JSON(255), nullable=True)  # Detalhes em formato JSON.
     data_hora = Column(DateTime, default=datetime.utcnow)
 
 

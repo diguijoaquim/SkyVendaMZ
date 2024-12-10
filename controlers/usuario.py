@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from email.mime.multipart import MIMEMultipart
 import random
 import string
-from sqlalchemy import func
+from sqlalchemy import func,String
 from datetime import datetime,timedelta
 
 def create_usuario_db(db: Session, usuario: UsuarioCreate):
@@ -167,18 +167,17 @@ def get_perfil(db: Session, usuario_id: int):
 
 
 
-def categorias_mais_populares(db: Session):
+def categorias_preferidas_por_usuario(db: Session, usuario_id: int):
     """
-    Retorna as categorias mais interagidas no geral.
+    Retorna as categorias mais interagidas por um usuário.
     """
-   
-
     categorias = (
         db.query(
-            Log.detalhes["categoria"].astext.label("categoria"),
+            Log.detalhes["categoria"].cast(String).label("categoria"),  # Corrigido aqui
             func.count(Log.id).label("total_interacoes"),
         )
-        .group_by(Log.detalhes["categoria"].astext)
+        .filter(Log.usuario_id == usuario_id)
+        .group_by(Log.detalhes["categoria"].cast(String))  # Corrigido aqui
         .order_by(func.count(Log.id).desc())
         .all()
     )
@@ -186,20 +185,16 @@ def categorias_mais_populares(db: Session):
     return [{"categoria": c[0], "total_interacoes": c[1]} for c in categorias]
 
 
-def categorias_preferidas_por_usuario(db: Session, usuario_id: int):
+def categorias_mais_populares(db: Session):
     """
-    Retorna as categorias mais interagidas por um usuário.
+    Retorna as categorias mais interagidas no geral.
     """
-    
-
-    # Consulta logs agrupados por categoria
     categorias = (
         db.query(
-            Log.detalhes["categoria"].astext.label("categoria"),
+            Log.detalhes["categoria"].cast(String).label("categoria"),  # Corrigido aqui
             func.count(Log.id).label("total_interacoes"),
         )
-        .filter(Log.usuario_id == usuario_id)
-        .group_by(Log.detalhes["categoria"].astext)
+        .group_by(Log.detalhes["categoria"].cast(String))  # Corrigido aqui
         .order_by(func.count(Log.id).desc())
         .all()
     )

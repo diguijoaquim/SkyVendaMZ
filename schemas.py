@@ -158,7 +158,7 @@ class ProdutoBase(BaseModel):
     descricao: str
     categoria: str
     detalhes:str
-    negociavel:str
+    negociavel: Optional[str] = None
     tipo:str
     slug: Optional[str] = None  
     CustomerID: int
