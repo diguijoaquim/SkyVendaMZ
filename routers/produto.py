@@ -311,6 +311,7 @@ def listar_produtos_em_promocao(
         ]
     }
 
+
 @router.get("/detalhe/{slug}")
 def obter_produto(
     slug: str,

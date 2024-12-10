@@ -4,7 +4,7 @@ import shutil
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 from typing import List, Optional
-from models import Produto, Usuario, InfoUsuario,Comentario,Transacao,produto_likes,Seguidor,Notificacao,Anuncio,Wallet,Status
+from models import *
 from schemas import ProdutoCreate, ProdutoUpdate
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -45,9 +45,6 @@ def save_image(file: UploadFile, upload_dir: str, max_size: tuple = (300, 300)) 
 def save_images(files: List[UploadFile], upload_dir: str) -> List[str]:
     return [save_image(file, upload_dir) for file in files]
 
-LIMITE_DIARIO = 3
-VALOR_PARA_PUBLICAR = Decimal("9.0")
-
 def create_produto_db_with_image( 
     db: Session, 
     produto: ProdutoCreate, 
@@ -82,35 +79,43 @@ def create_produto_db_with_image(
         Produto.data_publicacao >= hoje
     ).count()
     
-    LIMITE_DIARIO = 3  # Limite diário de publicações para contas PRO
+    LIMITE_DIARIO_NORMAL = 2  # Limite diário de publicações para contas normais
     VALOR_PARA_PUBLICAR = Decimal("9.0")  # Valor necessário para publicar se o limite diário for atingido
     
     # Obter a carteira do usuário
     wallet = db.query(Wallet).filter(Wallet.usuario_id == user_id).first()
     if not wallet:
-            wallet = Wallet(usuario_id=usuario.id, saldo_principal=0)  # Inicializa com saldo 0
-            db.add(wallet)
-            db.commit()
-            db.refresh(wallet)
+        wallet = Wallet(usuario_id=usuario.id, saldo_principal=Decimal("0.0"))  # Inicializa com saldo 0
+        db.add(wallet)
+        db.commit()
+        db.refresh(wallet)
     
-    # Se o usuário é PRO e não atingiu o limite diário, permite a publicação sem custo
+    # Verifica limites e custos de publicação
     if usuario.conta_pro:
-        if produtos_hoje >= LIMITE_DIARIO:
-            raise HTTPException(status_code=403, detail="Você atingiu o limite diário de publicações para sua conta PRO.")
+        # Usuários PRO não têm limites diários
+        pass
     else:
-        # Se o usuário não é PRO, verifica se ele tem saldo suficiente para publicar
-        if produtos_hoje >= LIMITE_DIARIO:
+        # Usuários normais têm limite de 2 publicações gratuitas por dia
+        if produtos_hoje >= LIMITE_DIARIO_NORMAL:
             # Se o saldo principal for suficiente, deduz o valor do saldo
             if wallet.saldo_principal >= VALOR_PARA_PUBLICAR:
-                wallet.saldo_principal -= Decimal(VALOR_PARA_PUBLICAR)
+                wallet.saldo_principal -= VALOR_PARA_PUBLICAR
 
-                transacao = Transacao(usuario_id=usuario.id, msisdn=usuario.username,tipo="saida", valor=VALOR_PARA_PUBLICAR, referencia="lacamento de produto", status="sucesso")
+                # Registra a transação
+                transacao = Transacao(
+                    usuario_id=usuario.id,
+                    msisdn=usuario.username,
+                    tipo="saida",
+                    valor=VALOR_PARA_PUBLICAR,
+                    referencia="Publicação de produto adicional",
+                    status="sucesso"
+                )
                 db.add(transacao)
-                db.commit()    
+                db.commit()
             elif wallet.saldo_principal + wallet.bonus >= VALOR_PARA_PUBLICAR:
-                # Se não houver saldo principal, mas houver bônus, deduz do bônus
+                # Se não houver saldo principal suficiente, utiliza bônus
                 wallet.bonus -= VALOR_PARA_PUBLICAR - wallet.saldo_principal
-                wallet.saldo_principal = 0  # Define saldo principal para 0
+                wallet.saldo_principal = Decimal("0.0")  # Define saldo principal para 0
             else:
                 raise HTTPException(status_code=403, detail="Saldo insuficiente para publicar o produto.")
     
@@ -139,6 +144,7 @@ def create_produto_db_with_image(
     enviar_notificacoes_para_seguidores(db, usuario.id, mensagem_notificacao)
     
     return db_produto
+
 
 def get_produtos_promovidos(db: Session):
     """

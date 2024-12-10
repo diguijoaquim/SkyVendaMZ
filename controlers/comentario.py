@@ -6,18 +6,18 @@ from fastapi import HTTPException
 
 def create_comentario_db(db: Session, comentario: dict, usuario_id: int):
     """
-    Adiciona um comentário para um produto.
+    Adiciona um comentário para um produto baseado no slug.
     """
-    produto = db.query(Produto).filter(Produto.id == comentario["produtoID"]).first()
+    # Buscar o produto pelo slug, não pelo id
+    produto = db.query(Produto).filter(Produto.slug == comentario["produtoSlug"]).first()
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     
     # Cria o comentário
     db_comentario = Comentario(
-        produtoID=comentario["produtoID"],
+        produtoID=produto.id,  # Usamos o ID do produto encontrado
         usuarioID=usuario_id,
         comentario=comentario["comentario"],
-        
     )
     db.add(db_comentario)
     db.commit()
@@ -28,7 +28,7 @@ def create_comentario_db(db: Session, comentario: dict, usuario_id: int):
         db=db,
         usuario_id=usuario_id,
         tipo_acao="comentario",
-        produto_id=comentario["produtoID"],
+        produto_id=produto.id,
         entidade="Comentario",
         detalhes={
             "comentario": comentario["comentario"]
@@ -36,6 +36,7 @@ def create_comentario_db(db: Session, comentario: dict, usuario_id: int):
     )
 
     return db_comentario
+
 
 
 

@@ -215,15 +215,11 @@ class PedidoUpdate(BaseModel):
     status: Optional[str] = None
 
 # Schemas para Comentário
-class ComentarioBase(BaseModel):
-    produtoID: int
-    CustomerID: int
-    comentario: str
-    data_comentario: datetime
-    avaliacao: Optional[int] = None
-
-class ComentarioCreate(ComentarioBase):
-    pass
+class ComentarioCreate(BaseModel):
+    produto_id: int
+    conteudo: str
+    usuario_id: int
+    data_comentario: datetime = None  # Adicionando o campo de data com valor padrão (pode ser opcional)
 
 class ComentarioUpdate(BaseModel):
     comentario: Optional[str] = None
