@@ -732,6 +732,15 @@ def listar_transacoes(db: Session = Depends(get_db), current_user: Usuario = Dep
 
 
 
+@router.get("/categorias/populares", summary="Categorias mais populares no geral")
+def obter_categorias_populares(db: Session = Depends(get_db)):
+    """
+    Retorna as categorias mais interagidas no geral.
+    """
+    categorias = categorias_mais_populares(db)
+    if not categorias:
+        raise HTTPException(status_code=404, detail="Nenhuma interação encontrada no sistema.")
+    return categorias
 
 
 @router.get("/categorias/{usuario_id}", summary="Categorias preferidas de um usuário")
@@ -747,13 +756,3 @@ def obter_categorias_preferidas(
         raise HTTPException(status_code=404, detail="Nenhuma interação encontrada para o usuário.")
     return categorias
 
-
-@router.get("/categorias/populares", summary="Categorias mais populares no geral")
-def obter_categorias_populares(db: Session = Depends(get_db)):
-    """
-    Retorna as categorias mais interagidas no geral.
-    """
-    categorias = categorias_mais_populares(db)
-    if not categorias:
-        raise HTTPException(status_code=404, detail="Nenhuma interação encontrada no sistema.")
-    return categorias

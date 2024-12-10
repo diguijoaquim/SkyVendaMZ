@@ -529,7 +529,7 @@ def listar_produtos(
                 {
                     "id": comentario.id,
                     "text": comentario.comentario,
-                    "date": comentario.data_comentario,
+                    "date": calcular_tempo_publicacao(comentario.data_comentario),
                     "user": {
                         "id": comentador.id,
                         "name": comentador.nome,
