@@ -4,7 +4,11 @@ from database import Base,engine
 from unidecode import unidecode
 import re
 import enum
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 from datetime import datetime,timedelta
+import random
+
 
 
 
@@ -98,10 +102,12 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(255), unique=True, index=True)
     nome = Column(String(50))
+    identificador_unico = Column(String(255), unique=True, nullable=True, index=True)
     email = Column(String(255), unique=True, index=True)
     senha = Column(String(255), nullable=True)  # Pode ser null para login com Google
     google_id = Column(String(255), unique=True, nullable=True)
     tipo = Column(String(255), nullable=True,default="cliente")
+    contacto=Column(String(20),nullable=True)
     # saldo = Column(Float, default=0.0)  # Removido: o saldo agora está na tabela Wallet
     foto_perfil = Column(String(50), nullable=True)
     min_perfil = Column(String(50), nullable=True)
@@ -165,7 +171,6 @@ class InfoUsuario(Base):
     distrito = Column(String(350))
     data_nascimento = Column(String(350))
     localizacao = Column(String(350))
-    contacto=Column(String(20),nullable=True)
     sexo = Column(String(20))
     nacionalidade = Column(String(255), nullable=True)
     bairro = Column(String(255), nullable=True)

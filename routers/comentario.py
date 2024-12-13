@@ -9,8 +9,8 @@ router=APIRouter(prefix="/comentarios",tags=["rotas de comentario"])
 
 @router.post("/")
 async def create_comentario(
-    produto_slug: str = Form(..., description="Slug do produto para o qual o comentário será feito"),
-    conteudo: str = Form(..., description="Conteúdo do comentário"),
+    produto_slug: str = Form(...),
+    conteudo: str = Form(...),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),  # Autenticação do usuário
 ):
@@ -48,8 +48,6 @@ def delete_comentario(comentario_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Comentario not found")
     return db_comentario
 
-
-@router.put("/{comentario_id}")
 def update_comentario(comentario_id: int, comentario: ComentarioUpdate, db: Session = Depends(get_db)):
     db_comentario = update_comentario_db(db=db, comentario_id=comentario_id, comentario=comentario)
     if db_comentario is None:

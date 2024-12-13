@@ -1,6 +1,8 @@
-from models import Log,Produto
+from models import Log,Produto,Usuario
 from sqlalchemy.orm import Session
 from datetime import datetime
+import random
+
 
 
 
@@ -37,3 +39,12 @@ def registrar_acao_com_categoria(
     db.commit()
     return log
 
+def gerar_identificador_unico(db: Session):
+    """
+    Gera um identificador único no formato "sk-123456789".
+    Verifica se já existe no banco antes de retornar.
+    """
+    while True:
+        identificador = f"sk-{random.randint(100000000, 999999999)}"
+        if not db.query(Usuario).filter(Usuario.identificador_unico == identificador).first():
+            return identificador

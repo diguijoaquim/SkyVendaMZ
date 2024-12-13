@@ -26,8 +26,12 @@ class UsuarioBase(BaseModel):
     username: str
     email: EmailStr
     senha: Optional[str] = None
+    #identificador_unico:str
     tipo: Optional[str] = None  # Tipo do usuário (Google, email, etc.)
 
+
+class UpdateContactRequest(BaseModel):
+    contacto: str
 
 class PublicacaoCreate(BaseModel):
     conteudo: str = Field(..., min_length=1)

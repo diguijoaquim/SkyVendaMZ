@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from models import Usuario, Admin  # Adicione a importação da classe Admin
 from schemas import UsuarioCreate,AdminCreate,AdminBase
 from database import SessionLocal
- 
+from controlers.utils import gerar_identificador_unico
 
 def get_db():
     db = SessionLocal()
@@ -135,18 +135,23 @@ def get_current_admin(db: Session = Depends(get_db), token: str = Depends(oauth2
     if admin is None:
         raise credentials_exception
     return admin
-
+    
 # Função para registrar um novo usuário (hashing da senha)
 # Função para registrar um novo usuário no banco de dados
+
 def register_user(db: Session, nome: str, username: str, email: str, senha: Optional[str], tipo: Optional[str]):
     hashed_password = get_password_hash(senha) if senha else None
+    
+    # Gera o identificador único para o novo usuário
+    identificador_unico = gerar_identificador_unico(db)
+    
     db_user = Usuario(
         nome=nome,
         username=username,
         email=email,
         tipo=tipo,
-        
-        senha=hashed_password
+        senha=hashed_password,
+        identificador_unico=identificador_unico  # Adiciona o identificador único
     )
     print(username)
     print(senha)
@@ -154,7 +159,6 @@ def register_user(db: Session, nome: str, username: str, email: str, senha: Opti
     db.commit()
     db.refresh(db_user)
     return db_user
-
 
     # Função para registrar um novo administrador (hashing da senha)
 def register_admin(db: Session, admin: AdminCreate):

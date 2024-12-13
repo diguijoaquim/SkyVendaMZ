@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status,Form,Body
+from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
 from sqlalchemy.orm import Session
 from models import Usuario, Transacao, Publicacao, Notificacao,Seguidor
 from schemas import *
@@ -17,6 +17,7 @@ import requests
 import httpx
 import json
 from decimal import Decimal
+from controlers.utils import gerar_identificador_unico
 
 
 router = APIRouter(prefix="/usuario", tags=["rotas de usuarios"])
@@ -227,6 +228,8 @@ def read_perfil(
         "username": perfil.username,
         "email": perfil.email,
         "name": perfil.nome,
+        "nr": perfil.contacto,
+        "id_unico":perfil.identificador_unico,
         "conta_pro": perfil.conta_pro,  # Indica se a conta é PRO
         "tipo": perfil.tipo,
         "perfil": perfil.foto_perfil,
@@ -236,6 +239,100 @@ def read_perfil(
         "seguidores": seguidores_info
     }
 
+
+
+
+@router.put("/contacto")
+def atualizar_contacto(
+    contacto: str = Form(...),  # Agora usando Form para receber os dados
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)  # Usuário autenticado
+):
+    # Recarregar a instância do usuário para garantir que esteja na sessão atual
+    user_in_db = db.query(Usuario).filter(Usuario.id == current_user.id).first()
+    if not user_in_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário não encontrado"
+        )
+
+    # Verificar se o novo contacto já está em uso por outro usuário
+    existing_user = db.query(Usuario).filter(Usuario.contacto == contacto).first()
+    if existing_user and existing_user.id != user_in_db.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O contacto informado já está em uso por outro usuário."
+        )
+
+    # Atualizar o contacto do usuário
+    user_in_db.contacto = contacto
+    db.commit()
+    db.refresh(user_in_db)
+
+    return {"message": "Contacto atualizado com sucesso", "contacto": user_in_db.contacto}
+
+
+@router.get("/perfil/{identificador_unico}")
+def read_perfil(
+    identificador_unico: str,
+    visitante_identificador: Optional[str] = Query(None),  # Identificador do visitante (opcional)
+    db: Session = Depends(get_db)
+):
+    # Buscar o perfil do usuário pelo identificador único
+    perfil = db.query(Usuario).filter(Usuario.identificador_unico == identificador_unico).first()
+    if not perfil:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Verificar se o visitante é o mesmo que o dono do perfil
+    visitante = None
+    if visitante_identificador:
+        visitante = db.query(Usuario).filter(Usuario.identificador_unico == visitante_identificador).first()
+
+    mesmo_usuario = visitante.id == perfil.id if visitante else False
+
+    # Total de seguidores e informações dos seguidores
+    total_seguidores = db.query(Seguidor).filter(Seguidor.usuario_id == perfil.id).count()
+    seguidores_info = db.query(Usuario).join(Seguidor, Usuario.id == Seguidor.seguidor_id).filter(
+        Seguidor.usuario_id == perfil.id).all()
+
+    # Total de pessoas que ele está seguindo e informações
+    total_seguindo = db.query(Seguidor).filter(Seguidor.seguidor_id == perfil.id).count()
+    seguindo_info = db.query(Usuario).join(Seguidor, Usuario.id == Seguidor.usuario_id).filter(
+        Seguidor.seguidor_id == perfil.id).all()
+
+    # Produtos publicados pelo usuário
+    produtos_publicados = db.query(Produto).filter(Produto.CustomerID == perfil.id).all()
+    produtos_info = [
+        {
+            "id": produto.id,
+            "nome": produto.nome,
+            "preco": float(produto.preco),
+            "capa": produto.capa,
+            "slug": produto.slug,
+            "publicado_em": produto.data_publicacao,
+        }
+        for produto in produtos_publicados
+    ]
+
+    # Montar a resposta com os dados do perfil
+    return {
+        "id": perfil.id,
+        "identificador_unico": perfil.identificador_unico,
+        "username": perfil.username,
+        "name": perfil.nome,
+        "email": perfil.email,
+        "id_unico": perfil.identificador_unico,
+        "conta_pro": perfil.conta_pro,
+        "tipo": perfil.tipo,
+        "perfil": perfil.foto_perfil,
+        "revisado": perfil.revisao,
+        "total_seguidores": total_seguidores,
+        "seguidores": [{"id": seg.id, "nome": seg.nome, "perfil": seg.foto_perfil} for seg in seguidores_info],
+        "total_seguindo": total_seguindo,
+        "seguindo": [{"id": seguindo.id, "nome": seguindo.nome, "perfil": seguindo.foto_perfil} for seguindo in seguindo_info],
+        "produtos_publicados": produtos_info,
+        "mesmo_usuario": mesmo_usuario,  # True se o visitante for o mesmo que o dono do perfil
+    }
 # Rotas relacionadas a usuários
 @router.put("/{usuario_id}/desativar_pro/")
 def desativar_conta_pro(usuario_id: int, db: Session = Depends(get_db)):
@@ -599,7 +696,6 @@ def publicar_texto(user_id: int, publicacao: PublicacaoCreate, db: Session = Dep
     return {"msg": "Publicação criada com sucesso!", "publicacao": nova_publicacao}
 
 
-# Endpoint para cadastro de um novo usuário utilizando dados de formulário
 @router.post("/cadastro")
 def create_usuario_endpoint(
     nome: str = Form(...),
@@ -620,10 +716,33 @@ def create_usuario_endpoint(
             detail="Usuário com este email ou username já existe."
         )
 
-    # Cadastra o usuário se ele ainda não existir
-    print(username)
-    print(senha)
-    return register_user(db, nome, username, email, senha, tipo)
+    # Gera o identificador único
+   
+
+    # Cria o novo usuário
+    novo_usuario = register_user(
+        db=db,
+        nome=nome,
+        username=username,
+        email=email,
+        senha=senha,
+        tipo=tipo or "cliente",  # Define "cliente" como tipo padrão, se não especificado
+       
+    )
+
+    db.add(novo_usuario)
+    db.commit()
+    db.refresh(novo_usuario)
+
+    return {
+        "id": novo_usuario.id,
+        "identificador_unico": novo_usuario.identificador_unico,
+        "nome": novo_usuario.nome,
+        "username": novo_usuario.username,
+        "email": novo_usuario.email,
+        "tipo": novo_usuario.tipo,
+        "mensagem": "Usuário cadastrado com sucesso!"
+    }
 
 @router.get("/pro/")
 def listar_usuarios_pro(db: Session = Depends(get_db)):
