@@ -239,9 +239,6 @@ def read_perfil(
         "seguidores": seguidores_info
     }
 
-
-
-
 @router.put("/contacto")
 def atualizar_contacto(
     contacto: str = Form(...),  # Agora usando Form para receber os dados
@@ -270,7 +267,6 @@ def atualizar_contacto(
     db.refresh(user_in_db)
 
     return {"message": "Contacto atualizado com sucesso", "contacto": user_in_db.contacto}
-
 
 @router.get("/perfil/{identificador_unico}")
 def read_perfil(
@@ -350,7 +346,6 @@ def desativar_conta_pro(usuario_id: int, db: Session = Depends(get_db)):
 
     return {"message": "Conta PRO desativada com sucesso.", "usuario": db_usuario}
 
-
 # Rota para listar todas as publicações
 @router.get("/publicacoes/")
 def listar_publicacoes(db: Session = Depends(get_db)):
@@ -372,8 +367,6 @@ def seguir_usuario_route(
     # Chama a função que implementa a lógica de seguir ou deixar de seguir
     resultado = seguir_usuario(db, usuario_id, seguidor.id)
     return resultado
-
-
 
 @router.get("/usuarios/{usuario_id}/seguindo")
 def get_usuario_seguindo(usuario_id: int, db: Session = Depends(get_db)):
@@ -398,7 +391,6 @@ def recuperar_senha(email_schema: EmailSchema, db: Session = Depends(get_db)):
     usuario.senha = hashed_senha
     db.commit()
 
-
 # Função para adicionar saldo usando M-Pesa (sem autenticação)
 @router.post("/{user_id}/adicionar_saldo/")
 def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get_db),current_user: Usuario = Depends(get_current_user)):
@@ -412,7 +404,7 @@ def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get
     info_usuario = db.query(InfoUsuario).filter(InfoUsuario.usuario_id == usuario.id).first()
     if not info_usuario or info_usuario.revisao != "sim":
         raise HTTPException(status_code=403, detail="Usuário não passou pela revisão e não pode adicionar saldo.")
-    
+
     # Cabeçalhos e payload para a requisição M-Pesa
     # Cabeçalhos da solicitação
     token="XfsLebYAsnNPRsMu6JKfRPH9W5fhzSb+W3cdizVQ/Bm5ho2Xi/tn/Oo4bwHmFLqYlHQVnrog3MziMmxZLN5NnPEqCu5F9tLeYwmIo4mqNp544Ai5B8s+IAbxr//WLIS+pk992fp6uZl8IgFkQreqsN+leWSgQdeW7oiGl7Z5k6e10uc4xuD3KOEldtye0Pzjj0DmHNdhDh8SzpdgkjyEmWPhvyMwCVxn80pqaKAH5UUDGxv+dbY4HgsoAprMC+hclhHkVfk5VfqNlOToxpn6LmfeoZZ5BJJysEA/Y/T3zlK9JYq+dWahlWyMv+UoMEh7VG1lw3k/Hb7dqKkSRmrhStsuRrHjAITKRSoWv98ZWntQQua+Fz/BGV7v6f6qsytTBHCWVJD3qWl3phKztYWpr0CeJ3aGYns+gtKP04V2WdPrqVylYJFEQILGCfKmtFqYZ3rhdKhgs4UDAOQMCkED4uS+op0p+I6kW6ftAyw6WDu5dqQ5OFKV3++f/015kptDzRpoieB1EfUltgabnfWCNzivi7ZJY6S+5+ZJPDI9ORjYq+QlF+Qi/RQmJiGWDh+S/UY2sA2d9692lfmWKk3+10YAUoZlQTlq9qCvqVXYVwquiLkUpHhnpNMbidVBwuBM03IxA0SrmervTM7RY2mS1BXTwO2IQekX+9bnJ6+Tpkk="
@@ -430,8 +422,7 @@ def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get
         "input_ThirdPartyReference": "11115",     # Referência única de terceiros
         "input_ServiceProviderCode": "171717"     # Código do provedor de serviço
     }
-
-   
+ 
 # Enviar a requisição para a API da M-Pesa
     response = requests.post(url, headers=headers, data=json.dumps(data))
 
@@ -441,10 +432,9 @@ def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get
         db.commit()
         return {"msg": "Saldo insuficiente."}
 
-    if response.status_code ==400:
+    if response.status_code ==400: 
         return {"msg": "ocorreu um erro"}
     
-
     # Verifique se o status da resposta é de sucesso
     if response.status_code == 200 or response.status_code == 201:
         # Buscar ou criar a wallet do usuário
@@ -456,7 +446,7 @@ def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get
             db.add(wallet)
             db.commit()
             db.refresh(wallet)
-
+            
         # Adicionar o valor ao saldo da wallet
         wallet.saldo_principal += valor
         db.commit()
