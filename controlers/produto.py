@@ -18,7 +18,8 @@ from slugify import slugify
 from PIL import Image
 from controlers.utils import *
 import shutil
-from taxas import calcular_taxa_publicacao
+from controlers.taxas import calcular_taxa_publicacao
+
 
 PRODUCT_UPLOAD_DIR = "uploads/produto"
 STATUS_UPLOAD_DIR= "uploads/status"
