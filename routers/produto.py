@@ -380,7 +380,24 @@ def obter_produto(
             "media_estrelas": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
         },
         "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
-        "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count(),
+        "comments": [
+                {
+                    "id": comentario.id,
+                    "text": comentario.comentario,
+                    "date": calcular_tempo_publicacao(comentario.data_comentario),
+                    "user": {
+                        "id": comentador.id,
+                        "name": comentador.nome,
+                        "avatar": comentador.foto_perfil
+                    }
+                }
+                for comentario, comentador in (
+                    db.query(Comentario, Usuario)
+                    .join(Usuario, Usuario.id == Comentario.usuarioID)
+                    .filter(Comentario.produtoID == produto.id)
+                    .all()
+                )
+            ]
     }
 
 @router.get("/produto/{produto_id}/likes")
