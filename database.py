@@ -5,7 +5,7 @@ import pymysql
 pymysql.install_as_MySQLdb()
 
 # URL de conexão MyS
-DATABASE_URL = "postgresql://postgres:KAIMEobaMrAHgyAYOSwrhiffWWfmjfgF@autorack.proxy.rlwy.net:18439/railway"
+DATABASE_URL = "postgresql://postgres:gQJIzVbyZEDacKjrhTraoyGvCEcAAlvi@junction.proxy.rlwy.net:37958/railway"
 #DATABASE_URL = "sqlite:///skyvendas.db"
 # Criação do engine para MySQL
 engine = create_engine(DATABASE_URL)
