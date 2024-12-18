@@ -92,7 +92,6 @@ class InfoUsuarioCreate(BaseModel):
     distrito: str
     data_nascimento: str
     sexo: str
-    contacto: Optional[str]=None
     nacionalidade: Optional[str] = None
     bairro: Optional[str] = None
     usuario_id: int
