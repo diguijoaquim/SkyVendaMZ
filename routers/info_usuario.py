@@ -35,7 +35,6 @@ async def create_info_usuario(
         distrito=distrito,
         data_nascimento=data_nascimento,
         sexo=sexo,
-        contacto=contacto,
         nacionalidade=nacionalidade,
         bairro=bairro,
         usuario_id=current_user.id
