@@ -46,6 +46,7 @@ def save_image(file: UploadFile, upload_dir: str, max_size: tuple = (300, 300)) 
 
 def save_images(files: List[UploadFile], upload_dir: str) -> List[str]:
     return [save_image(file, upload_dir) for file in files]
+
 def create_produto_db_with_image( 
     db: Session, 
     produto: ProdutoCreate, 

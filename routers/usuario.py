@@ -14,6 +14,7 @@ from datetime import datetime
 from auth import *
 from fastapi.responses import RedirectResponse
 import requests
+from sqlalchemy import or_
 import httpx
 import json
 from decimal import Decimal
@@ -391,6 +392,7 @@ def recuperar_senha(email_schema: EmailSchema, db: Session = Depends(get_db)):
     usuario.senha = hashed_senha
     db.commit()
 
+
 # Função para adicionar saldo usando M-Pesa (sem autenticação)
 @router.post("/{user_id}/adicionar_saldo/")
 def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get_db),current_user: Usuario = Depends(get_current_user)):
@@ -750,13 +752,159 @@ def listar_notificacoes(usuario_id: int, db: Session = Depends(get_db)):
     return notificacoes
 
 
+# Função auxiliar para calcular a média de estrelas
+def calcular_media_estrelas(usuario_id: int, db: Session):
+    # Calcula a média das estrelas para o usuário
+    media_estrelas = db.query(func.avg(Avaliacao.estrelas)).filter(Avaliacao.avaliado_id == usuario_id).scalar()
+    return media_estrelas if media_estrelas else 0
+
+
+
+# Função para calcular a média de estrelas
+def calcular_media_estrelas2(db: Session, usuario_id: int) -> Optional[float]:
+    avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+    if not avaliacoes:
+        return None  # Caso o usuário não tenha avaliações
+    soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
+    return round(soma_estrelas / len(avaliacoes), 2)
+
+@router.get("/pesquisar_usuarios")
+def pesquisar_usuarios(
+    db: Session = Depends(get_db),
+    search: Optional[str] = Query(None, alias="q"),  # Pesquisa pelo nome ou username
+    page: int = Query(1, ge=1),  # Página (1 por padrão)
+    page_size: int = Query(10, le=100),  # Tamanho da página (máximo de 100)
+    identificador_unico: Optional[str] = None  # Identificador único do usuário logado (opcional)
+):
+    # Filtrando apenas usuários ativos
+    query = db.query(Usuario).filter(Usuario.ativo == True)
+
+    # Se houver uma pesquisa por nome ou username
+    if search:
+        query = query.filter(
+            or_(
+                Usuario.nome.ilike(f"%{search}%"),
+                Usuario.username.ilike(f"%{search}%")
+            )
+        )
+
+    # Ordenando os usuários: PRO primeiro, depois os simples (ativos e não PRO)
+    query = query.order_by(
+        Usuario.conta_pro.desc(),  # Usuários PRO primeiro
+        Usuario.nome.asc()  # Ordenando pelo nome para os usuários simples
+    )
+
+    # Paginação
+    usuarios = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    # Buscar o usuário logado pelo identificador_unico (se fornecido)
+    usuario_logado = None
+    if identificador_unico:
+        usuario_logado = db.query(Usuario).filter(Usuario.identificador_unico == identificador_unico).first()
+
+    usuarios_resposta = []
+    for usuario in usuarios:
+        # Buscando a quantidade de seguidores
+        total_seguidores = db.query(Seguidor).filter(Seguidor.usuario_id == usuario.id).count()
+        
+        # Calculando a média de estrelas
+        media_estrelas = calcular_media_estrelas2(db, usuario.id)
+
+        # Calculando o número de produtos do usuário
+        total_produtos = db.query(Produto).filter(Produto.CustomerID == usuario.id).count()
+
+        # Calculando o número de publicações (por exemplo, status ou posts)
+        total_publicacoes = db.query(Publicacao).filter(Publicacao.usuario_id == usuario.id).count()
+
+        # Verificar se o identificador_unico foi fornecido e se o usuário está seguindo o outro
+        if usuario_logado:
+            segue_usuario = (
+                db.query(Seguidor)
+                .filter(Seguidor.usuario_id == usuario.id, Seguidor.seguidor_id == usuario_logado.id)
+                .count() > 0
+            )
+        else:
+            segue_usuario = False  # Não forneceu identificador_unico
+
+        usuarios_resposta.append({
+            "username": usuario.username,
+            "identificador_unico": usuario.identificador_unico,
+            "name": usuario.nome,
+            "email": usuario.email,
+            "foto_perfil": usuario.foto_perfil,
+            "total_seguidores": total_seguidores,
+            "media_estrelas": media_estrelas,
+            "conta_pro": usuario.conta_pro,
+            "total_produtos": total_produtos,
+            "total_publicacoes": total_publicacoes,
+            "segue_usuario": segue_usuario
+        })
+
+    return usuarios_resposta
+
+@router.get("/usuarios/lojas")
+async def listar_usuarios(
+    skip: int = 0, 
+    limit: int = 10, 
+    identificador_unico: Optional[str] = None,  # Identificador único do usuário logado
+    db: Session = Depends(get_db)
+):
+    # Listar usuários com paginação
+    usuarios = db.query(Usuario).offset(skip).limit(limit).all()
+
+    usuarios_response = []
+    
+    # Se o identificador_unico for fornecido, busca o usuário logado
+    usuario_logado = None
+    if identificador_unico:
+        usuario_logado = db.query(Usuario).filter(Usuario.identificador_unico == identificador_unico).first()
+
+    for usuario in usuarios:
+        # Calculando a média de estrelas para o usuário
+        media_estrelas = calcular_media_estrelas(usuario.id, db)
+
+        # Contar total de seguidores
+        total_seguidores = db.query(Seguidor).filter(Seguidor.usuario_id == usuario.id).count()
+        
+        # Contar total de produtos publicados
+        total_produtos = db.query(Produto).filter(Produto.CustomerID == usuario.id).count()
+        
+        # Contar o total de publicações
+        total_publicacoes = len(usuario.publicacoes)
+
+        # Verificar se o usuário logado segue esse usuário
+        if usuario_logado:
+            segue_usuario = (
+                db.query(Seguidor)
+                .filter(Seguidor.usuario_id == usuario.id, Seguidor.seguidor_id == usuario_logado.id)
+                .count() > 0
+            )
+        else:
+            segue_usuario = False  # Se não foi passado o identificador_unico, assume que não segue
+
+        usuarios_response.append({
+            "username": usuario.username,
+            "identificador_unico": usuario.identificador_unico,
+            "name": usuario.nome,
+            "email": usuario.email,
+            "foto_perfil": usuario.foto_perfil,
+            "total_seguidores": total_seguidores,
+            "media_estrelas": media_estrelas,
+            "conta_pro": usuario.conta_pro,
+            "total_produtos": total_produtos,
+            "total_publicacoes": total_publicacoes,
+            "segue_usuario": segue_usuario  # Verificação de quem segue o usuário
+        })
+    
+    return {"usuarios": usuarios_response}
+
+
 @router.put("/{usuario_id}")
 def update_usuario_endpoint(usuario_id: int, usuario: UsuarioUpdate, db: Session = Depends(get_db)):
     db_usuario = update_usuario_db(db=db, usuario_id=usuario_id, usuario=usuario)
     if db_usuario is None:
         raise HTTPException(status_code=404, detail="Usuario not found")
     return db_usuario
-
 
 @router.put("/{user_id}/atualizar_senha/")
 def atualizar_senha(user_id: int, senha_atual: str, nova_senha: str, db: Session = Depends(get_db)):

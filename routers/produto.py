@@ -566,15 +566,84 @@ def listar_produtos(
     ]
 
 
-@router.get("/usuarios/{user_id}/produtos/")
-def get_produtos_by_user(user_id: int, db: Session = Depends(get_db)):
+@router.get("/produtos/")
+def get_produtos_usuario_logado(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+    skip: int = Query(0, ge=0, description="Número de registros a pular para paginação."),
+    limit: int = Query(10, ge=1, le=100, description="Número máximo de registros a retornar."),
+):
     """
-    Rota que retorna todos os produtos de um usuário específico.
+    Rota que retorna todos os produtos do usuário logado com paginação.
     """
-    produtos = db.query(Produto).filter(Produto.CustomerID == user_id).all()
+    # Query com paginação
+    produtos_query = db.query(Produto).filter(Produto.CustomerID == current_user.id)
+    total_produtos = produtos_query.count()
+    produtos = produtos_query.offset(skip).limit(limit).all()
+
     if not produtos:
         raise HTTPException(status_code=404, detail="Nenhum produto encontrado para este usuário.")
-    return produtos
+
+    # Preparar a resposta
+    produtos_response = []
+    for produto in produtos:
+        # Calcular tempo desde a publicação
+        tempo_publicacao = calcular_tempo_publicacao(produto.data_publicacao)
+
+        # Verificar se o usuário logado deu like no produto
+        liked = current_user.id in [u.id for u in produto.usuarios_que_deram_like]
+
+        # Buscar comentários com usuários associados
+        comentarios = db.query(Comentario, Usuario).join(Usuario, Usuario.id == Comentario.usuarioID).filter(
+            Comentario.produtoID == produto.id).all()
+        comentarios_response = [
+            {
+                "id": comentario.id,
+                "text": comentario.comentario,
+                "date": calcular_tempo_publicacao(comentario.data_comentario),
+                "user": {
+                    "id": comentador.id,
+                    "name": comentador.nome,
+                    "avatar": comentador.foto_perfil,
+                }
+            }
+            for comentario, comentador in comentarios
+        ]
+
+        # Adicionar produto à resposta
+        produtos_response.append({
+            "id": produto.id,
+            "title": produto.nome,
+            "thumb": produto.capa,
+            "images": produto.fotos,
+            "price": float(produto.preco),
+            "stock_quantity": produto.quantidade_estoque,
+            "state": produto.estado,
+            "province": produto.provincia,
+            "district": produto.distrito,
+            "location": produto.localizacao,
+            "review": produto.revisao,
+            "availability": produto.disponiblidade,
+            "description": produto.descricao,
+            "category": produto.categoria,
+            "details": produto.detalhes,
+            "type": produto.tipo,
+            "views": produto.visualizacoes,
+            "active": produto.ativo,
+            "customer_id": produto.CustomerID,
+            "likes": produto.likes,
+            "slug": produto.slug,
+            "time": tempo_publicacao,
+            "liked": liked,
+            "comments": comentarios_response,
+        })
+
+    return {
+        "total": total_produtos,
+        "produtos": produtos_response,
+        "pagina_atual": skip // limit + 1,
+        "total_paginas": (total_produtos + limit - 1) // limit,
+    }
 
 @router.post("/usuarios/{usuario_id}/status/")
 async def criar_status(
