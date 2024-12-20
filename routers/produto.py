@@ -405,12 +405,26 @@ def obter_produto(
 def produto_likes(produto_id: int, db: Session = Depends(get_db)):
     return get_produto_likes(db, produto_id)
 
-@router.delete("/produtos/{produto_id}")
-def delete_produto(produto_id: int, db: Session = Depends(get_db)):
-    db_produto = delete_produto(db=db, produto_id=produto_id)
+@router.delete("/produtos/{slug}")
+def delete_produto(slug: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    """
+    Deleta um produto baseado no slug. Apenas o proprietário do produto pode deletá-lo.
+    """
+    # Buscar produto pelo slug
+    db_produto = db.query(Produto).filter(Produto.slug == slug).first()
+
     if db_produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
-    return db_produto
+
+    # Verificar se o usuário atual é o proprietário do produto
+    if db_produto.CustomerID != current_user.id:
+        raise HTTPException(status_code=403, detail="Acesso negado. Você não pode deletar este produto.")
+
+    # Remover o produto do banco de dados
+    db.delete(db_produto)
+    db.commit()
+
+    return {"detail": "Produto deletado com sucesso."}
 
 # A rota precisa de `Form` para receber JSON junto com arquivos
 @router.put("/{produto_id}")
@@ -663,8 +677,6 @@ async def criar_status(
     )
 
     return resultado
-
-
 
 @router.post("/status/{status_id}/responder")
 def responder_status(

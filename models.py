@@ -216,7 +216,7 @@ class Comentario(Base):
     __tablename__ = "comentarios"
 
     id = Column(Integer, primary_key=True, index=True)
-    produtoID = Column(Integer, ForeignKey("produto.id"), nullable=False)  # Ajustado para "produto.id"
+    produtoID = Column(Integer, ForeignKey("produto.id", ondelete="CASCADE"), nullable=False)  # Ajustado para "produto.id"
     usuarioID = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     comentario = Column(String, nullable=False)
     data_comentario = Column(DateTime, default=datetime.utcnow)
@@ -257,7 +257,7 @@ class Produto(Base):
     anuncio = relationship('Anuncio', back_populates='produto')
     slug = Column(String(250), unique=True, index=True)
         # Relacionamento com Comentarios (um para muitos)
-    comentarios = relationship("Comentario", back_populates="produto")
+    comentarios = relationship("Comentario", back_populates="produto",cascade="all, delete")
     # Novos campos
     negociavel = Column(Boolean, default=False)  # Indica se o produto é negociável
     promocao = Column(Boolean, default=False)  # Indica se o produto está em promoção
