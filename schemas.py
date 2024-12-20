@@ -161,7 +161,6 @@ class ProdutoBase(BaseModel):
     descricao: str
     categoria: str
     detalhes:str
-    negociavel: Optional[str] = None
     tipo:str
     slug: Optional[str] = None  
     CustomerID: int
@@ -181,6 +180,10 @@ class ProdutoUpdate(BaseModel):
     tipo: Optional[str] = None
     categoria: Optional[int] = None
     CustomerID: Optional[int] = None
+
+
+    class Config:
+        from_attributes = True
     
 # Schemas para Mensagem
 class MensagemBase(BaseModel):

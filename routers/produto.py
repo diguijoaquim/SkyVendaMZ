@@ -106,7 +106,6 @@ async def create_produto(
     disponiblidade: str = Form(...),
     descricao: str = Form(...),
     categoria: str = Form(...),
-    negociavel: Optional[str] = Form(None),
     detalhes: str = Form(...),
     tipo: str = Form(...),
     fotos: List[UploadFile] = File(...),
@@ -134,7 +133,6 @@ async def create_produto(
         disponiblidade=disponiblidade,
         descricao=descricao,
         categoria=categoria,
-        negociavel=negociavel,
         detalhes=detalhes,
         tipo=tipo,
         CustomerID=current_user.id,  # Use o ID do usuário
@@ -426,10 +424,9 @@ def delete_produto(slug: str, db: Session = Depends(get_db), current_user: Usuar
 
     return {"detail": "Produto deletado com sucesso."}
 
-# A rota precisa de `Form` para receber JSON junto com arquivos
-@router.put("/{produto_id}")
+@router.put("/{slug}")
 async def update_produto(
-    produto_id: int,
+    slug: str,
     nome: Optional[str] = Form(None),
     preco: Optional[float] = Form(None),
     quantidade_estoque: Optional[int] = Form(None),
@@ -439,11 +436,15 @@ async def update_produto(
     detalhes: Optional[str] = Form(None),
     tipo: Optional[str] = Form(None),
     categoria: Optional[int] = Form(None),
-    CustomerID: Optional[int] = Form(None),
-    files: List[UploadFile] = File(None),
+    current_user: Usuario = Depends(get_current_user),
+    files: Optional[List[UploadFile]] = File(None),  # Aceitar arquivos opcionais
     db: Session = Depends(get_db)
 ):
-    # Transforme os dados recebidos via Form em um dicionário para atualizar o produto
+    # Validar os dados recebidos
+    if files and not isinstance(files, list):  # Certifique-se de que `files` é uma lista
+        raise HTTPException(status_code=400, detail="O campo 'files' deve ser uma lista de arquivos.")
+
+    # Criar o objeto do produto com os dados recebidos
     produto = ProdutoUpdate(
         nome=nome,
         preco=preco,
@@ -454,17 +455,16 @@ async def update_produto(
         detalhes=detalhes,
         tipo=tipo,
         categoria=categoria,
-        CustomerID=CustomerID,
-      
+        CustomerID=current_user.id,
     )
-    
-    # Função de atualização do produto
-    db_produto = update_produto_db_with_images(db=db, produto_id=produto_id, produto=produto, files=files)
+
+    # Atualizar o produto no banco de dados, processando arquivos se forem enviados
+    db_produto = update_produto_db_with_images(db=db, produto_id=slug, produto=produto, files=files)
     
     if db_produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     
-    return db_produto
+    return {"message": "Produto atualizado com sucesso", "produto": db_produto}
 
 @router.post("/{produto_slug}/like")
 def like_produto(

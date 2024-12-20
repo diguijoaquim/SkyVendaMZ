@@ -508,8 +508,8 @@ def enviar_notificacoes_para_seguidores(db: Session, usuario_id: int, mensagem: 
 
 
 
-def update_produto_db_with_images(db: Session, produto_id: int, produto: ProdutoUpdate, files: Optional[List[UploadFile]] = None):
-    db_produto = db.query(Produto).filter(Produto.id == produto_id).first()
+def update_produto_db_with_images(db: Session, produto_id: str, produto: ProdutoUpdate, files: Optional[List[UploadFile]] = None):
+    db_produto = db.query(Produto).filter(Produto.slug == produto_id).first()
     
     if not db_produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
