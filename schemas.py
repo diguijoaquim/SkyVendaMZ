@@ -178,7 +178,7 @@ class ProdutoUpdate(BaseModel):
     descricao: Optional[str] = None
     detalhes: Optional[str] = None
     tipo: Optional[str] = None
-    categoria: Optional[int] = None
+    categoria: Optional[str] = None
     CustomerID: Optional[int] = None
 
 

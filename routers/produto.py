@@ -424,6 +424,48 @@ def delete_produto(slug: str, db: Session = Depends(get_db), current_user: Usuar
 
     return {"detail": "Produto deletado com sucesso."}
 
+
+
+@router.put("/produtos/{slug}/imagens")
+async def update_produto_imagens(
+    slug: str,
+    files: List[UploadFile] = File(...),  # Upload de imagens obrigatório
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza as imagens de um produto baseado no slug. Apenas o proprietário do produto pode atualizar as imagens.
+    """
+    # Validar os arquivos enviados
+    for file in files:
+        if not isinstance(file, UploadFile):
+            raise HTTPException(
+                status_code=400,
+                detail=f"O arquivo enviado não é válido. Esperado UploadFile, recebido: {type(file).__name__}"
+            )
+
+    # Buscar produto pelo slug
+    db_produto = db.query(Produto).filter(Produto.slug == slug).first()
+
+    if db_produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    # Verificar se o usuário atual é o proprietário do produto
+    if db_produto.CustomerID != current_user.id:
+        raise HTTPException(status_code=403, detail="Acesso negado. Você não pode atualizar as imagens deste produto.")
+
+    # Atualizar imagens no banco de dados
+    update_produto_imagens_db(db=db, produto=db_produto, files=files)
+
+    return {"message": "Imagens do produto atualizadas com sucesso."}
+
+
+
+
+
+
+
+
 @router.put("/{slug}")
 async def update_produto(
     slug: str,
@@ -435,14 +477,12 @@ async def update_produto(
     descricao: Optional[str] = Form(None),
     detalhes: Optional[str] = Form(None),
     tipo: Optional[str] = Form(None),
-    categoria: Optional[int] = Form(None),
+    categoria: Optional[str] = Form(None),
     current_user: Usuario = Depends(get_current_user),
-    files: Optional[List[UploadFile]] = File(None),  # Aceitar arquivos opcionais
     db: Session = Depends(get_db)
 ):
     # Validar os dados recebidos
-    if files and not isinstance(files, list):  # Certifique-se de que `files` é uma lista
-        raise HTTPException(status_code=400, detail="O campo 'files' deve ser uma lista de arquivos.")
+    
 
     # Criar o objeto do produto com os dados recebidos
     produto = ProdutoUpdate(
@@ -459,12 +499,14 @@ async def update_produto(
     )
 
     # Atualizar o produto no banco de dados, processando arquivos se forem enviados
-    db_produto = update_produto_db_with_images(db=db, produto_id=slug, produto=produto, files=files)
+    db_produto = update_produto_db_with_images(db=db, produto_id=slug, produto=produto)
     
     if db_produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     
     return {"message": "Produto atualizado com sucesso", "produto": db_produto}
+
+
 
 @router.post("/{produto_slug}/like")
 def like_produto(

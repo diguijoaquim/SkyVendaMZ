@@ -508,7 +508,7 @@ def enviar_notificacoes_para_seguidores(db: Session, usuario_id: int, mensagem: 
 
 
 
-def update_produto_db_with_images(db: Session, produto_id: str, produto: ProdutoUpdate, files: Optional[List[UploadFile]] = None):
+def update_produto_db_with_images(db: Session, produto_id: str, produto: ProdutoUpdate):
     db_produto = db.query(Produto).filter(Produto.slug == produto_id).first()
     
     if not db_produto:
@@ -519,10 +519,7 @@ def update_produto_db_with_images(db: Session, produto_id: str, produto: Produto
         setattr(db_produto, key, value)
     
     # Se houver novas imagens, salva e atualiza
-    if files:
-        new_image_filenames = save_images(files, PRODUCT_UPLOAD_DIR)
-        db_produto.fotos = ",".join(new_image_filenames)
-    
+  
     db.commit()
     db.refresh(db_produto)
     
