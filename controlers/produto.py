@@ -167,8 +167,7 @@ def get_produtos_promovidos(db: Session):
     return produtos_promovidos
 
 
-
-def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int):
+def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int) -> bool:
     # Verificar se o seguidor e o usuário existem
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     seguidor = db.query(Usuario).filter(Usuario.id == seguidor_id).first()
@@ -189,7 +188,7 @@ def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int):
         # Deixar de seguir
         db.delete(seguimento_existente)
         db.commit()
-        return {"mensagem": f"Você deixou de seguir {usuario.nome}."}
+        return False  # Deixou de seguir
     else:
         # Seguir
         novo_seguidor = Seguidor(usuario_id=usuario_id, seguidor_id=seguidor_id)
@@ -200,7 +199,7 @@ def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int):
         mensagem = f"{seguidor.nome} começou a seguir você!"
         enviar_notificacao(db, usuario_id, mensagem)
 
-        return {"mensagem": f"Agora você está seguindo {usuario.nome}!"}
+        return True  # Começou a seguir
 
   
 def calcular_tempo_publicacao(data_publicacao):
