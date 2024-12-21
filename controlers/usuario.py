@@ -73,7 +73,7 @@ def listar_usuarios_nao_verificados(db: Session):
     Returns:
         List[Usuario]: Lista de usuários não verificados.
     """
-    return db.query(InfoUsuario).filter(InfoUsuario.revisao != "sim").all()
+    return db.query(Usuario).filter(Usuario.revisao != "sim").all()
 
 def ativar_usuario(db: Session, usuario_id: int):
     # Busca o usuário no banco de dados
@@ -89,9 +89,6 @@ def ativar_usuario(db: Session, usuario_id: int):
     usuario.ativo = True
     db.commit()  # Confirma as mudanças no banco
     return {"sucesso": "Usuário ativado com sucesso"}
-
-
-
 
 def desativar_usuario(db: Session, usuario_id: int):
     # Busca o usuário no banco de dados

@@ -672,7 +672,7 @@ def get_produtos_usuario_logado(
             "title": produto.nome,
             "thumb": produto.capa,
             "images": produto.fotos,
-            "price": float(produto.preco),
+            "price": Decimal(produto.preco) if produto.preco is not None else Decimal("0.0"),
             "stock_quantity": produto.quantidade_estoque,
             "state": produto.estado,
             "province": produto.provincia,
