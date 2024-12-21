@@ -478,13 +478,21 @@ async def update_produto(
     detalhes: Optional[str] = Form(None),
     tipo: Optional[str] = Form(None),
     categoria: Optional[str] = Form(None),
-    current_user: Usuario = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    # Validar os dados recebidos
+    # Buscar o produto pelo slug
+    db_produto = db.query(Produto).filter(Produto.slug == slug).first()
     
-
-    # Criar o objeto do produto com os dados recebidos
+    if not db_produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    
+    # Verificar se o usuário autenticado é o proprietário do produto
+    if db_produto.CustomerID != current_user.id:
+        raise HTTPException(
+            status_code=403, detail="Você não tem permissão para atualizar este produto"
+        )
+    
     produto = ProdutoUpdate(
         nome=nome,
         preco=preco,
@@ -505,7 +513,6 @@ async def update_produto(
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     
     return {"message": "Produto atualizado com sucesso", "produto": db_produto}
-
 
 
 @router.post("/{produto_slug}/like")

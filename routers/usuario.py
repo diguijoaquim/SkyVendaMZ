@@ -827,6 +827,7 @@ def pesquisar_usuarios(
             segue_usuario = False  # Não forneceu identificador_unico
 
         usuarios_resposta.append({
+            "id":usuario.id,
             "username": usuario.username,
             "identificador_unico": usuario.identificador_unico,
             "name": usuario.nome,
@@ -883,6 +884,7 @@ async def listar_usuarios(
             segue_usuario = False  # Se não foi passado o identificador_unico, assume que não segue
 
         usuarios_response.append({
+            "id":usuario.id,
             "username": usuario.username,
             "identificador_unico": usuario.identificador_unico,
             "name": usuario.nome,

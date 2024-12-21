@@ -20,7 +20,7 @@ def get_db():
 # Configurações do JWT
 SECRET_KEY = "your_secret_key_here"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 43200
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="usuario/token")
 
