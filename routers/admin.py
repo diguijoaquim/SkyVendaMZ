@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import APIRouter,Query
 from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
 from controlers.produto import calcular_tempo_publicacao
+from sqlalchemy.orm import joinedload
 
 router=APIRouter(prefix="/admin", tags=["rotas de admin"] )
 
@@ -71,16 +72,59 @@ def delete_admins(admin_id: int, db: Session = Depends(get_db)):
     return db_admin
 
 
-@router.get("/usuarios/nao_verificados/")
+def listar_usuarios_nao_verificados_com_detalhes(db: Session):
+    """
+    Retorna todos os usuários não verificados, incluindo os dados completos da tabela InfoUsuario.
+    """
+    usuarios = (
+        db.query(Usuario)
+        .filter(Usuario.revisao == "sim")  # Filtra os usuários não verificados
+        .options(joinedload(Usuario.info_usuario))  # Carrega os dados relacionados da tabela InfoUsuario
+        .all()
+    )
+    return usuarios
+
+
+
+@router.get("/usuarios/verificados/")
 def obter_usuarios_nao_verificados(db: Session = Depends(get_db)):
     """
-    Rota para obter todos os usuários não verificados.
-    
-    Returns:
-        List[Usuario]: Lista de usuários não verificados.
+    Rota para obter todos os usuários não verificados com informações completas.
     """
-    usuarios_nao_verificados = listar_usuarios_nao_verificados(db=db)
-    return usuarios_nao_verificados
+    usuarios_nao_verificados = listar_usuarios_nao_verificados_com_detalhes(db=db)
+
+    return [
+        {
+            "id": usuario.id,
+            "username": usuario.username,
+            "nome": usuario.nome,
+            "email": usuario.email,
+            "contacto": usuario.contacto,
+            "tipo": usuario.tipo,
+            "foto_perfil": usuario.foto_perfil,
+            "foto_capa": usuario.foto_capa,
+            "ativo": usuario.ativo,
+            "conta_pro": usuario.conta_pro,
+            "data_cadastro": usuario.data_cadastro,
+            "revisao": usuario.revisao,
+            "info_usuario": {
+                "id": usuario.info_usuario.id if usuario.info_usuario else None,
+                "foto_retrato": usuario.info_usuario.foto_retrato if usuario.info_usuario else None,
+                "foto_bi_frente": usuario.info_usuario.foto_bi_frente if usuario.info_usuario else None,
+                "foto_bi_verso": usuario.info_usuario.foto_bi_verso if usuario.info_usuario else None,
+                "provincia": usuario.info_usuario.provincia if usuario.info_usuario else None,
+                "distrito": usuario.info_usuario.distrito if usuario.info_usuario else None,
+                "data_nascimento": usuario.info_usuario.data_nascimento if usuario.info_usuario else None,
+                "localizacao": usuario.info_usuario.localizacao if usuario.info_usuario else None,
+                "sexo": usuario.info_usuario.sexo if usuario.info_usuario else None,
+                "nacionalidade": usuario.info_usuario.nacionalidade if usuario.info_usuario else None,
+                "bairro": usuario.info_usuario.bairro if usuario.info_usuario else None,
+                "revisao": usuario.info_usuario.revisao if usuario.info_usuario else None,
+            },
+        }
+        for usuario in usuarios_nao_verificados
+    ]
+
 
 @router.put("/admins/{admin_id}")
 def update_admins(admin_id: int, admin: AdminUpdate, db: Session = Depends(get_db)):
@@ -182,7 +226,7 @@ def listar_usuarios_verificados(
     """
     Lista todos os usuários verificados, com paginação.
     """
-    total_verificados = db.query(Usuario).filter(Usuario.revisao == "sim").count()
+    total_verificados = db.query(Usuario).filter(Usuario.revisao == "nao").count()
     usuarios = (
         db.query(Usuario)
         .filter(Usuario.revisao == "sim")
