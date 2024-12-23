@@ -2,11 +2,13 @@ from controlers.admin import *
 from controlers.usuario import listar_usuarios_nao_verificados
 from schemas import *
 from controlers.info_usuario import *
-from models import InfoUsuario
+from models import InfoUsuario,Produto,Transacao,Wallet
 from auth import *
+from sqlalchemy import func
 from controlers.usuario import ativar_usuario,delete_usuario_db,desativar_usuario
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi import APIRouter
+from fastapi import APIRouter,Query
+from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
 
 router=APIRouter(prefix="/admin", tags=["rotas de admin"] )
 
@@ -103,3 +105,164 @@ def delete_categoria(categoria_id: int, db: Session = Depends(get_db)):
     if db_categoria is None:
         raise HTTPException(status_code=404, detail="Categoria not found")
     return db_categoria
+
+
+
+
+
+@router.get("/usuarios/", response_model=dict)
+def listar_usuarios(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos os usuários com paginação, incluindo o total de usuários e total de produtos postados por cada um.
+    """
+    total_usuarios = db.query(Usuario).count()
+    usuarios = (
+        db.query(Usuario)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    resultado = []
+    for usuario in usuarios:
+        total_produtos = db.query(Produto).filter(Produto.CustomerID == usuario.id).count()
+        resultado.append({
+            "id": usuario.id,
+            "nome": usuario.nome,
+            "email": usuario.email,
+            "total_produtos": total_produtos,
+            "saldo": usuario.wallet.saldo_principal if usuario.wallet else 0.0,
+        })
+
+    return {
+        "total_usuarios": total_usuarios,
+        "usuarios": resultado,
+        "page": page,
+        "per_page": per_page,
+    }
+
+
+@router.get("/usuarios/pendentes/", response_model=dict)
+def listar_usuarios_pendentes(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos os usuários com estado pendente, com paginação.
+    """
+    total_pendentes = db.query(Usuario).filter(Usuario.revisao == "pendente").count()
+    usuarios = (
+        db.query(Usuario)
+        .filter(Usuario.revisao == "pendente")
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return {
+        "total_pendentes": total_pendentes,
+        "usuarios": usuarios,
+        "page": page,
+        "per_page": per_page,
+    }
+
+
+@router.get("/usuarios/verificados/")
+def listar_usuarios_verificados(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos os usuários verificados, com paginação.
+    """
+    total_verificados = db.query(Usuario).filter(Usuario.revisao == "sim").count()
+    usuarios = (
+        db.query(Usuario)
+        .filter(Usuario.revisao == "sim")
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+
+    return {
+        "total_verificados": total_verificados,
+        "usuarios": usuarios,
+        "page": page,
+        "per_page": per_page,
+    }
+
+@router.get("/sistema/resumo/", response_model=dict)
+def resumo_sistema(db: Session = Depends(get_db)):
+    """
+    Retorna um resumo do sistema, incluindo o saldo total, total de produtos ativos e total de usuários.
+    """
+    # Calcular o saldo total
+    saldo_total = db.query(func.sum(Wallet.saldo_principal)).scalar() or 0.0
+
+    # Contar os produtos ativos
+    total_produtos_ativos = db.query(Produto).filter(Produto.ativo == True).count()
+
+    # Contar o total de produtos
+    total_produtos = db.query(Produto).count()
+
+    # Contar o total de usuários
+    total_usuarios = db.query(Usuario).count()
+
+    return {
+        "saldo_total": saldo_total,
+        "total_produtos_ativos": total_produtos_ativos,
+        "total_produtos": total_produtos,
+        "total_usuarios": total_usuarios,
+    }
+
+
+@router.get("/{usuario_id}/transacoes")
+def listar_transacoes_usuario(
+    usuario_id: int,
+    page: int = 1,
+    page_size: int = 10,
+    db: Session = Depends(get_db),
+   
+):
+    """
+    Lista as transações de um usuário específico com paginação.
+    """
+
+    # Verificar se o usuário existe
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+
+    # Paginação
+    offset = (page - 1) * page_size
+    transacoes = (
+        db.query(Transacao)
+        .filter(Transacao.usuario_id == usuario_id)
+        .order_by(Transacao.data_hora.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+    if not transacoes:
+        return []
+
+    return [
+        {
+            "id": transacao.id,
+            "msisdn": transacao.msisdn,
+            "valor": float(transacao.valor),
+            "referencia": transacao.referencia,
+            "status": transacao.status,
+            "data_hora": transacao.data_hora,
+            "tipo": transacao.tipo,
+        }
+        for transacao in transacoes
+    ]
