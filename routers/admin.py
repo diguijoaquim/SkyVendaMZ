@@ -86,6 +86,20 @@ def listar_usuarios_nao_verificados_com_detalhes(db: Session):
 
 
 
+
+def listar_os_pendentes(db: Session):
+    """
+    Retorna todos os usuários não verificados, incluindo os dados completos da tabela InfoUsuario.
+    """
+    usuarios = (
+        db.query(Usuario)
+        .filter(Usuario.revisao == "pendentes")  # Filtra os usuários não verificados
+        .options(joinedload(Usuario.info_usuario))  # Carrega os dados relacionados da tabela InfoUsuario
+        .all()
+    )
+    return usuarios
+
+
 @router.get("/usuarios/verificados/")
 def obter_usuarios_nao_verificados(db: Session = Depends(get_db)):
     """
@@ -191,33 +205,46 @@ def listar_usuarios(
     }
 
 
-@router.get("/usuarios/pendentes/", response_model=dict)
-def listar_usuarios_pendentes(
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
-):
+@router.get("/usuarios/pendetes/")
+def obter_usuarios_nao_verificados(db: Session = Depends(get_db)):
     """
-    Lista todos os usuários com estado pendente, com paginação.
+    Rota para obter todos os usuários não verificados com informações completas.
     """
-    total_pendentes = db.query(Usuario).filter(Usuario.revisao == "pendente").count()
-    usuarios = (
-        db.query(Usuario)
-        .filter(Usuario.revisao == "pendente")
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .all()
-    )
+    usuarios_nao_verificados = listar_os_pendentes(db=db)
 
-    return {
-        "total_pendentes": total_pendentes,
-        "usuarios": usuarios,
-        "page": page,
-        "per_page": per_page,
-    }
+    return [
+        {
+            "id": usuario.id,
+            "username": usuario.username,
+            "nome": usuario.nome,
+            "email": usuario.email,
+            "contacto": usuario.contacto,
+            "tipo": usuario.tipo,
+            "foto_perfil": usuario.foto_perfil,
+            "foto_capa": usuario.foto_capa,
+            "ativo": usuario.ativo,
+            "conta_pro": usuario.conta_pro,
+            "data_cadastro": usuario.data_cadastro,
+            "revisao": usuario.revisao,
+            "info_usuario": {
+                "id": usuario.info_usuario.id if usuario.info_usuario else None,
+                "foto_retrato": usuario.info_usuario.foto_retrato if usuario.info_usuario else None,
+                "foto_bi_frente": usuario.info_usuario.foto_bi_frente if usuario.info_usuario else None,
+                "foto_bi_verso": usuario.info_usuario.foto_bi_verso if usuario.info_usuario else None,
+                "provincia": usuario.info_usuario.provincia if usuario.info_usuario else None,
+                "distrito": usuario.info_usuario.distrito if usuario.info_usuario else None,
+                "data_nascimento": usuario.info_usuario.data_nascimento if usuario.info_usuario else None,
+                "localizacao": usuario.info_usuario.localizacao if usuario.info_usuario else None,
+                "sexo": usuario.info_usuario.sexo if usuario.info_usuario else None,
+                "nacionalidade": usuario.info_usuario.nacionalidade if usuario.info_usuario else None,
+                "bairro": usuario.info_usuario.bairro if usuario.info_usuario else None,
+                "revisao": usuario.info_usuario.revisao if usuario.info_usuario else None,
+            },
+        }
+        for usuario in usuarios_nao_verificados
+    ]
 
-
-@router.get("/usuarios/verificados/")
+@router.get("/usuarios/nao_verificados/")
 def listar_usuarios_verificados(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
@@ -229,7 +256,7 @@ def listar_usuarios_verificados(
     total_verificados = db.query(Usuario).filter(Usuario.revisao == "nao").count()
     usuarios = (
         db.query(Usuario)
-        .filter(Usuario.revisao == "sim")
+        .filter(Usuario.revisao == "nao")
         .offset((page - 1) * per_page)
         .limit(per_page)
         .all()
