@@ -9,6 +9,7 @@ from controlers.usuario import ativar_usuario,delete_usuario_db,desativar_usuari
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi import APIRouter,Query
 from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
+from controlers.produto import calcular_tempo_publicacao
 
 router=APIRouter(prefix="/admin", tags=["rotas de admin"] )
 
@@ -213,12 +214,14 @@ def resumo_sistema(db: Session = Depends(get_db)):
 
     # Contar o total de usuários
     total_usuarios = db.query(Usuario).count()
+    usuarios_pro=db.query(Usuario).filter(Usuario.conta_pro == True).all()
 
     return {
         "saldo_total": saldo_total,
         "total_produtos_ativos": total_produtos_ativos,
         "total_produtos": total_produtos,
         "total_usuarios": total_usuarios,
+        "usurios_pro":usuarios_pro,
     }
 
 
@@ -261,7 +264,7 @@ def listar_transacoes_usuario(
             "valor": float(transacao.valor),
             "referencia": transacao.referencia,
             "status": transacao.status,
-            "data_hora": transacao.data_hora,
+            "data_hora": calcular_tempo_publicacao(transacao.data_hora),
             "tipo": transacao.tipo,
         }
         for transacao in transacoes
