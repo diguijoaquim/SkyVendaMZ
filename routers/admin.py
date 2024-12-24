@@ -72,7 +72,7 @@ def delete_admins(admin_id: int, db: Session = Depends(get_db)):
     return db_admin
 
 
-def listar_usuarios_nao_verificados_com_detalhes(db: Session):
+def listar_usuarios_verificado(db: Session):
     """
     Retorna todos os usuários não verificados, incluindo os dados completos da tabela InfoUsuario.
     """
@@ -99,14 +99,13 @@ def listar_os_pendentes(db: Session):
     )
     return usuarios
 
-
-@router.get("/usuarios/verificados/")
-def obter_usuarios_nao_verificados(db: Session = Depends(get_db)):
+@router.get("/usuarios/verificados/", response_model=List[dict])
+def obter_usuarios_verificados(db: Session = Depends(get_db)):
     """
-    Rota para obter todos os usuários não verificados com informações completas.
+    Rota para obter todos os usuários verificados.
     """
-    usuarios_nao_verificados = listar_usuarios_nao_verificados_com_detalhes(db=db)
-
+    usuarios_verificados = db.query(Usuario).filter(Usuario.revisao == "verificado").all()
+ 
     return [
         {
             "id": usuario.id,
@@ -136,10 +135,8 @@ def obter_usuarios_nao_verificados(db: Session = Depends(get_db)):
                 "revisao": usuario.info_usuario.revisao if usuario.info_usuario else None,
             },
         }
-        for usuario in usuarios_nao_verificados
+        for usuario in usuarios_verificados
     ]
-
-
 @router.put("/admins/{admin_id}")
 def update_admins(admin_id: int, admin: AdminUpdate, db: Session = Depends(get_db)):
     db_admin = update_admin(db=db, admin_id=admin_id, admin=admin)
@@ -206,7 +203,7 @@ def listar_usuarios(
 
 
 @router.get("/usuarios/pendetes/")
-def obter_usuarios_nao_verificados(db: Session = Depends(get_db)):
+def obter_usuarios_pendentes(db: Session = Depends(get_db)):
     """
     Rota para obter todos os usuários não verificados com informações completas.
     """
