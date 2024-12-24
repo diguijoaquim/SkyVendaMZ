@@ -104,7 +104,7 @@ def obter_usuarios_verificados(db: Session = Depends(get_db)):
     """
     Rota para obter todos os usuários verificados.
     """
-    usuarios_verificados = db.query(Usuario).filter(Usuario.revisao == "verificado").all()
+    usuarios_verificados = db.query(Usuario).filter(Usuario.revisao == "sim").all()
  
     return [
         {
