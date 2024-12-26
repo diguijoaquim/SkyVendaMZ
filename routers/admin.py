@@ -270,6 +270,39 @@ def listar_usuarios_verificados(
         "per_page": per_page,
     }
 
+
+
+@router.get("/{usuario_id}/produtos/")
+def listar_produtos_usuario(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100)
+):
+    """
+    Rota para listar produtos de um usuário específico com paginação.
+
+    - `usuario_id`: ID do usuário.
+    - `page`: Página atual para paginação (inicia no 1).
+    - `limit`: Número máximo de itens por página (default: 10, máximo: 100).
+    """
+    offset = (page - 1) * limit
+
+    # Verificar se o usuário existe
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    # Consultar os produtos do usuário
+    produtos = db.query(Produto).filter(Produto.CustomerID == usuario_id).offset(offset).limit(limit).all()
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total": db.query(Produto).filter(Produto.CustomerID == usuario_id).count(),
+        "produtos": produtos
+    }
+
 @router.get("/sistema/resumo/", response_model=dict)
 def resumo_sistema(db: Session = Depends(get_db)):
     """
