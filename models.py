@@ -146,7 +146,7 @@ class Usuario(Base):
                 self.data_ativacao_pro = None
 
     # Relacionamento com a tabela InfoUsuario
-    info_usuario = relationship("InfoUsuario", back_populates="usuario")
+    info_usuario = relationship("InfoUsuario", back_populates="usuario", uselist=False)
     produtos_curtidos = relationship(
         "Produto",
         secondary="produto_likes",  # Certifique-se de que o nome da tabela de associação está correto

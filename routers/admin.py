@@ -99,13 +99,14 @@ def listar_os_pendentes(db: Session):
     )
     return usuarios
 
+
 @router.get("/usuarios/verificados/", response_model=List[dict])
 def obter_usuarios_verificados(db: Session = Depends(get_db)):
     """
     Rota para obter todos os usuários verificados.
     """
     usuarios_verificados = db.query(Usuario).filter(Usuario.revisao == "sim").all()
- 
+
     return [
         {
             "id": usuario.id,
@@ -133,10 +134,13 @@ def obter_usuarios_verificados(db: Session = Depends(get_db)):
                 "nacionalidade": usuario.info_usuario.nacionalidade if usuario.info_usuario else None,
                 "bairro": usuario.info_usuario.bairro if usuario.info_usuario else None,
                 "revisao": usuario.info_usuario.revisao if usuario.info_usuario else None,
-            },
+            } if usuario.info_usuario else None,
         }
         for usuario in usuarios_verificados
     ]
+
+
+
 @router.put("/admins/{admin_id}")
 def update_admins(admin_id: int, admin: AdminUpdate, db: Session = Depends(get_db)):
     db_admin = update_admin(db=db, admin_id=admin_id, admin=admin)
@@ -205,7 +209,7 @@ def listar_usuarios(
 @router.get("/usuarios/pendetes/")
 def obter_usuarios_pendentes(db: Session = Depends(get_db)):
     """
-    Rota para obter todos os usuários não verificados com informações completas.
+    Rota para obter todos os usuários pendentes.
     """
     usuarios_nao_verificados = listar_os_pendentes(db=db)
 
@@ -248,7 +252,7 @@ def listar_usuarios_verificados(
     db: Session = Depends(get_db)
 ):
     """
-    Lista todos os usuários verificados, com paginação.
+    Lista todos os usuários nao verificados , com paginação.
     """
     total_verificados = db.query(Usuario).filter(Usuario.revisao == "nao").count()
     usuarios = (
@@ -260,7 +264,7 @@ def listar_usuarios_verificados(
     )
 
     return {
-        "total_verificados": total_verificados,
+        "total_usuarios": total_verificados,
         "usuarios": usuarios,
         "page": page,
         "per_page": per_page,
