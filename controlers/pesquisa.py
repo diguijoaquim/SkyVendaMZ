@@ -73,37 +73,62 @@ def executar_pesquisa_avancada(
     produtos_paginados = produtos_ordenados[offset: offset + limit]
 
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
+    def calcular_media_estrelas(usuario_id: int):
+        avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+        if not avaliacoes:
+            return None  # Sem avaliações
+        soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
+        return round(soma_estrelas / len(avaliacoes), 2)
 
     return [
         {
             "id": produto.id,
-            "nome": produto.nome,
-            "capa": produto.capa,
-            "fotos": produto.fotos,
-            "preco": float(produto.preco),
-            "quantidade_estoque": produto.quantidade_estoque,
-            "estado": produto.estado,
-            "provincia": produto.provincia,
-            "distrito": produto.distrito,
-            "localizacao": produto.localizacao,
-            "revisao": produto.revisao,
-            "disponibilidade": produto.disponiblidade,
-            "descricao": produto.descricao,
-            "categoria": produto.categoria,
-            "detalhes": produto.detalhes,
-            "tipo": produto.tipo,
-            "view": produto.visualizacoes,
-            "ativo": produto.ativo,
-            "CustomerID": produto.CustomerID,
+            "title": produto.nome,
+            "thumb": produto.capa,
+            "images": produto.fotos,
+            "price": float(produto.preco),
+            "stock_quantity": produto.quantidade_estoque,
+            "state": produto.estado,
+            "province": produto.provincia,
+            "district": produto.distrito,
+            "location": produto.localizacao,
+            "review": produto.revisao,
+            "availability": produto.disponiblidade,
+            "description": produto.descricao,
+            "category": produto.categoria,
+            "details": produto.detalhes,
+            "type": produto.tipo,
+            "views": produto.visualizacoes,
+            "active": produto.ativo,
+            "customer_id": produto.CustomerID,
             "likes": produto.likes,
             "slug": produto.slug,
-            "tempo": calcular_tempo_publicacao(produto.data_publicacao),
-            "usuario": {
+            "time": calcular_tempo_publicacao(produto.data_publicacao),
+            "user": {
                 "id": produto.usuario.id,
-                "nome": produto.usuario.nome,
+                "name": produto.usuario.nome,
+                "avatar": produto.usuario.foto_perfil,
+                "average_stars": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
             },
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
-            "comentario": db.query(Comentario).filter(Comentario.produtoID == produto.id).count()
+            "comments": [
+                {
+                    "id": comentario.id,
+                    "text": comentario.comentario,
+                    "date": calcular_tempo_publicacao(comentario.data_comentario),
+                    "user": {
+                        "id": comentador.id,
+                        "name": comentador.nome,
+                        "avatar": comentador.foto_perfil
+                    }
+                }
+                for comentario, comentador in (
+                    db.query(Comentario, Usuario)
+                    .join(Usuario, Usuario.id == Comentario.usuarioID)
+                    .filter(Comentario.produtoID == produto.id)
+                    .all()
+                )
+            ]
         }
         for produto in produtos_paginados
     ]
