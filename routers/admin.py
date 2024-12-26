@@ -93,7 +93,7 @@ def listar_os_pendentes(db: Session):
     """
     usuarios = (
         db.query(Usuario)
-        .filter(Usuario.revisao == "pendentes")  # Filtra os usuários não verificados
+        .filter(Usuario.revisao == "pendente")  # Filtra os usuários não verificados
         .options(joinedload(Usuario.info_usuario))  # Carrega os dados relacionados da tabela InfoUsuario
         .all()
     )
