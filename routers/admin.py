@@ -21,6 +21,16 @@ router=APIRouter(prefix="/admin", tags=["rotas de admin"] )
 
 @router.post("/token")
 def login_admin(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    Rota para autenticação do administrador.
+
+    Args:
+    - db: Conexão com o banco de dados.
+    - form_data: Dados do formulário de login.
+
+    Returns:
+    - dict: Token de acesso e tipo do token.
+    """
     admin = authenticate_admin(db, form_data.username, form_data.password)
     if not admin:
         raise HTTPException(
@@ -28,8 +38,12 @@ def login_admin(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestF
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token(data={"sub": str(admin.id)}, role="admin")  # Usando o ID do admin no token
+    # Criação do token de acesso
+    access_token = create_access_token_admin(
+        subject={"sub": str(admin.id), "role": "admin"}  # Inclui os dados no token
+    )
     return {"access_token": access_token, "token_type": "bearer"}
+
 
 
 @router.put("/usuario/{usuario_id}/revisao")
@@ -42,10 +56,28 @@ def revisar_usuario(usuario_id: int, nova_revisao: str, motivo: str = None, db: 
     # Chama a função para atualizar a revisão e enviar a notificação
     return update_revisao_info_usuario(db_info_usuario, nova_revisao, db, motivo)
 
-# Admin routes
-@router.post("/resgistro")
-def create_admin(admin: AdminCreate, db: Session = Depends(get_db)):
-    return register_admin(db=db, admin=admin)
+
+@router.post("/registro")
+def create_admin(
+    nome: str = Form(...),
+    email: str = Form(...),
+    senha: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Rota para criar um administrador usando dados enviados via formulário.
+
+    Args:
+    - `nome` (str): Nome do administrador.
+    - `email` (str): E-mail do administrador.
+    - `senha` (str): Senha do administrador.
+
+    Returns:
+    - Dados do administrador registrado.
+    """
+    # Cria um objeto AdminCreate com os dados do formulário
+    admin_data = AdminCreate(nome=nome, email=email, senha=senha)
+    return register_admin(db=db, admin=admin_data)
 
 
 @router.get("/{admin_id}")
@@ -119,7 +151,7 @@ def obter_usuarios_verificados(db: Session = Depends(get_db)):
             "foto_capa": usuario.foto_capa,
             "ativo": usuario.ativo,
             "conta_pro": usuario.conta_pro,
-            "data_cadastro": usuario.data_cadastro,
+            "data_cadastro":calcular_tempo_publicacao( usuario.data_cadastro),
             "revisao": usuario.revisao,
             "info_usuario": {
                 "id": usuario.info_usuario.id if usuario.info_usuario else None,

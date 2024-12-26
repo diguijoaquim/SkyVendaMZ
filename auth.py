@@ -53,6 +53,26 @@ def create_access_token(data: dict, role: str, expires_delta: Optional[timedelta
 
 
 
+def create_access_token_admin(subject: dict, expires_delta: timedelta = None):
+    """
+    Cria um token de acesso JWT.
+
+    Args:
+    - subject (dict): Dados a serem incluídos no token.
+    - expires_delta (timedelta, optional): Duração do token.
+
+    Returns:
+    - str: Token JWT gerado.
+    """
+    to_encode = subject.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def create_access_token(user_id: int, user_role: str, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = {"sub": str(user_id), "role": user_role}  # Inclui o ID e o papel do usuário no token
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
