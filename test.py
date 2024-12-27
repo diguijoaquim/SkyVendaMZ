@@ -1,27 +1,16 @@
-import requests
+from sqlalchemy import create_engine, text
 
-# Define the URL, headers, and data for the PUT request
-url = 'http://127.0.0.1:5000/produtos/sapatos-nike'
-headers = {
-    'accept': 'application/json',
-    'Authorization': 'Bearer  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImxvamEiLCJleHAiOjE3MzczNzc3NDZ9.nGVzluh7k3pibQW0P5ygW3WY-I5rnoQdLE5VEMKhdZU',
-    'Content-Type': 'application/x-www-form-urlencoded'
-}
-data = {
-    'estado': 'semno',
-    'descricao': 'blabla',
-    'preco': 2000,
-    'categoria': 'vestuario',
-    'tipo': 'string',
-    'disponiblidade': 'string',
-    'detalhes': 'string',
-    'nome': 'sapto2eeee',
-    'quantidade_estoque': 3
-}
+# Substitua pela URL de conexão com o banco de dados
+DATABASE_URL = "postgresql://postgres:gQJIzVbyZEDacKjrhTraoyGvCEcAAlvi@junction.proxy.rlwy.net:37958/railway"  # Exemplo para PostgreSQL
 
-# Send the PUT request and get the response
-response = requests.put(url, headers=headers, data=data)
+# Crie o engine do SQLAlchemy
+engine = create_engine(DATABASE_URL)
 
-# Print the status code and response text
-print(response.status_code)
-print(response.text)
+# Execute o comando DROP TABLE
+with engine.connect() as connection:
+    try:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        print("Tabela 'alembic_version' removida com sucesso!")
+    except Exception as e:
+        print(f"Erro ao remover a tabela: {e}")
+

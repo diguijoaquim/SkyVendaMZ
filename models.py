@@ -263,6 +263,8 @@ class Produto(Base):
     promocao = Column(Boolean, default=False)  # Indica se o produto está em promoção
     data_promocao = Column(DateTime, nullable=True)  # Data de início da promoção
     custo_promocao = Column(DECIMAL, default=0.00)  # Custo acumulado da promoção
+    pedidos = relationship("Pedido", back_populates="produto", cascade="all, delete-orphan")
+
     
     def calcular_custo_promocao(self):
         if self.promocao and self.data_promocao:
@@ -343,15 +345,19 @@ class Pedido(Base):
     customer_id = Column(Integer, ForeignKey("usuarios.id"))
     produto_id = Column(Integer, ForeignKey("produto.id"))
     quantidade = Column(Integer, nullable=False)
-    preco_unitario = Column(DECIMAL)
     preco_total = Column(DECIMAL)
     data_pedido = Column(DateTime, default=datetime.utcnow)
     status = Column(String(350))  # Estado do pedido: "Pendente", "Aceito", "Enviado", "Entregue", "Cancelado"
     aceito_pelo_vendedor = Column(Boolean, default=False)
+    tipo=Column(String(20),nullable=True)
     recebido_pelo_cliente = Column(Boolean, default=False)
     data_aceite = Column(DateTime)  # Para rastrear quando o pedido foi aceito
     data_envio = Column(DateTime)   # Para rastrear quando o produto foi enviado
     data_entrega = Column(DateTime)  # Para rastrear quando o produto foi marcado como entregue
+     # Relacionamentos
+    produto = relationship("Produto", back_populates="pedidos")  # Relacionamento com Produto
+    customer = relationship("Usuario", back_populates="pedidos")  # Relacionamento com Usuario
+
 
 class Wallet(Base):
     __tablename__ = "wallet"

@@ -199,9 +199,6 @@ def delete_categoria(categoria_id: int, db: Session = Depends(get_db)):
     return db_categoria
 
 
-
-
-
 @router.get("/usuarios/", response_model=dict)
 def listar_usuarios(
     page: int = Query(1, ge=1),

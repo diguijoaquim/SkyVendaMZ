@@ -210,6 +210,7 @@ class PedidoBase(BaseModel):
     quantidade: int
     produto_id: int
     status: str = "pendente"
+    tipo: Optional[str] = "normal"
     
     class Config:
         ConfigDict(from_attributes=True)

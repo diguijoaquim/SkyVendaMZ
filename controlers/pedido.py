@@ -41,6 +41,8 @@ def enviar_notificacao(db: Session, usuario_id: int, mensagem: str):
     db.refresh(notificacao)
     return notificacao
 
+
+
 def create_pedido_db(db: Session, pedido: PedidoCreate):
     # Verifica se o produto existe
     produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
@@ -52,35 +54,35 @@ def create_pedido_db(db: Session, pedido: PedidoCreate):
         raise HTTPException(status_code=400, detail="Estoque insuficiente para o pedido.")
 
     if produto.CustomerID == pedido.customer_id:
-        
-        raise HTTPException(status_code=400, detail="voce nao pode comprar o seu proprio produto")
+        raise HTTPException(status_code=400, detail="Você não pode comprar o seu próprio produto.")
 
     # Calcula o preço total do pedido
     preco_total = pedido.quantidade * produto.preco
 
-    # Congela o saldo do comprador
-    wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == pedido.customer_id).first()
-    if not wallet_comprador or wallet_comprador.saldo_principal < preco_total:
-        raise HTTPException(status_code=400, detail="Saldo insuficiente.")
+    # Se o tipo do pedido for "SkyWallet", toca o saldo do comprador e vendedor
+    if pedido.tipo == "SkyWallet":
+        # Verifica e congela o saldo do comprador
+        wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == pedido.customer_id).first()
+        if not wallet_comprador or wallet_comprador.saldo_principal < preco_total:
+            raise HTTPException(status_code=400, detail="Saldo insuficiente.")
 
-    # Congela o saldo do comprador
-    wallet_comprador.saldo_congelado += preco_total
-    wallet_comprador.saldo_principal -= preco_total
+        wallet_comprador.saldo_congelado += preco_total
+        wallet_comprador.saldo_principal -= preco_total
 
-    # Localiza a carteira do vendedor e atualiza o saldo congelado do vendedor
-    wallet_vendedor = db.query(Wallet).filter(Wallet.usuario_id == produto.CustomerID).first()
-    if not wallet_vendedor:
-        raise HTTPException(status_code=404, detail="Carteira do vendedor não encontrada.")
+        # Atualiza o saldo congelado do vendedor
+        wallet_vendedor = db.query(Wallet).filter(Wallet.usuario_id == produto.CustomerID).first()
+        if not wallet_vendedor:
+            raise HTTPException(status_code=404, detail="Carteira do vendedor não encontrada.")
 
-    wallet_vendedor.saldo_congelado += preco_total
+        wallet_vendedor.saldo_congelado += preco_total
 
     # Cria o pedido
     db_pedido = Pedido(
-        customer_id=pedido.customer_id,  # Aqui use `customer_id` com letra minúscula
+        customer_id=pedido.customer_id,
         produto_id=pedido.produto_id,
         quantidade=pedido.quantidade,
-        preco_unitario=produto.preco,
         preco_total=preco_total,
+        tipo=pedido.tipo,  # Define o tipo do pedido
         status="Pendente"
     )
 
@@ -88,15 +90,14 @@ def create_pedido_db(db: Session, pedido: PedidoCreate):
     db.commit()
     db.refresh(db_pedido)
 
-    # Busca o e-mail do vendedor (usuário que publicou o produto) na tabela 'usuarios'
+    # Busca o e-mail do vendedor e envia notificação
     vendedor = db.query(Usuario).filter(Usuario.id == produto.CustomerID).first()
     if not vendedor:
         raise HTTPException(status_code=404, detail="Vendedor não encontrado.")
 
-    vendedor_email = vendedor.email  # Pega o e-mail do vendedor
-    produto_nome = produto.nome  # Pega o nome do produto
+    vendedor_email = vendedor.email
+    produto_nome = produto.nome
 
-    # Envia o e-mail de notificação ao vendedor
     email_enviado = send_email(
         recipient=vendedor_email,
         subject="Novo Pedido Recebido",
@@ -106,7 +107,6 @@ def create_pedido_db(db: Session, pedido: PedidoCreate):
     if not email_enviado:
         raise HTTPException(status_code=500, detail="Falha ao enviar o e-mail de notificação.")
 
-    # Chama a função enviar_notificacao para criar a notificação
     try:
         mensagem = f"Você recebeu um novo pedido para o produto {produto_nome}"
         enviar_notificacao(db, vendedor.id, mensagem)
@@ -114,6 +114,8 @@ def create_pedido_db(db: Session, pedido: PedidoCreate):
         raise HTTPException(status_code=500, detail=f"Erro ao enviar notificação: {str(e)}")
 
     return db_pedido
+
+
 
 def listar_notificacoes(db: Session, usuario_id: int):
     notificacoes = db.query(Notificacao).filter(Notificacao.usuario_id == usuario_id).all()
@@ -177,12 +179,22 @@ def aceitar_pedido(db: Session, pedido_id: int, vendedor_id: int):
     if not produto:
         raise HTTPException(status_code=403, detail="Você não tem permissão para aceitar este pedido.")
 
-    # Atualiza o estado para "Aceito pelo Vendedor"
-    pedido.aceito_pelo_vendedor = True
-    pedido.status = "Aceito pelo Vendedor"
-    db.commit()
+    # Verifica o tipo do pedido
+    if pedido.tipo == "normal":
+        # Se for um pedido normal, marca como "Concluído" diretamente
+        pedido.status = "Concluido"
+        pedido.data_aceite = datetime.utcnow()
+    else:
+        # Se não for "normal", atualiza o estado para "Aceito pelo Vendedor"
+        pedido.aceito_pelo_vendedor = True
+        pedido.status = "Aceito pelo Vendedor"
+        pedido.data_aceite = datetime.utcnow()
 
-    return {"mensagem": "Pedido aceito com sucesso."}
+    db.commit()
+    db.refresh(pedido)
+
+    return {"mensagem": "Pedido processado com sucesso.", "status": pedido.status}
+
 
 def confirmar_recebimento_cliente(db: Session, pedido_id: int, cliente_id: int):
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id, Pedido.customer_id == cliente_id).first()

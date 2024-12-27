@@ -15,8 +15,8 @@ def verificar_saldo(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{pedido_id}/aceitar/")
-def aceitar_pedido_route(pedido_id: int, vendedor_id: int, db: Session = Depends(get_db)):
-    return aceitar_pedido(db, pedido_id, vendedor_id)
+def aceitar_pedido_route(pedido_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    return aceitar_pedido(db, pedido_id, current_user.id)
 
 @router.post("/{pedido_id}/confirmar-recebimento/")
 def confirmar_recebimento_route(pedido_id: int, cliente_id: int, db: Session = Depends(get_db)):
@@ -64,23 +64,39 @@ def read_pedido(pedido_id: int, db: Session = Depends(get_db)):
     if db_pedido is None:
         raise HTTPException(status_code=404, detail="Pedido not found")
     return db_pedido
+
 @router.post("/pedidos/criar/")
 def criar_pedido(
     produto_id: int,
     quantidade: int,
+    tipo: Optional[str] = "normal",  # O tipo de pedido: "normal" ou "fora do sistema"
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    # Cria o objeto PedidoCreate com `customer_id` em vez de `CustomerID`
+    """
+    Rota para criar um pedido.
+
+    Args:
+    - produto_id (int): ID do produto.
+    - quantidade (int): Quantidade desejada.
+    - tipo (str): Tipo do pedido ("normal" ou "fora do sistema").
+    - db: Sessão do banco de dados.
+    - current_user: Usuário autenticado.
+
+    Returns:
+    - Pedido criado.
+    """
+    # Cria o objeto PedidoCreate
     pedido_data = PedidoCreate(
         produto_id=produto_id,
         quantidade=quantidade,
-        customer_id=current_user.id  # Pega o ID do usuário atual (comprador) com o nome correto
+        customer_id=current_user.id,
+        tipo=tipo
     )
 
-    # Chama a função create_pedido_db com o objeto PedidoCreate
- 
+    # Chama a função de criação do pedido
     return create_pedido_db(pedido=pedido_data, db=db)
+
 # Rota para confirmar um pedido
 @router.post("/pedidos/{pedido_id}/confirmar/")
 def confirmar_pedid(
