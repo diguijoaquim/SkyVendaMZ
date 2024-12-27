@@ -137,7 +137,7 @@ class Usuario(Base):
 
     # Relacionamento com a tabela Wallet
     wallet = relationship("Wallet", back_populates="usuario", uselist=False)  # Supondo que exista um relacionamento um-para-um
-
+    pedidos = relationship("Pedido", backref="usuario")
     def verificar_expiracao_pro(self):
         if self.conta_pro and self.data_ativacao_pro:
             # Verifica se já passaram 30 dias
