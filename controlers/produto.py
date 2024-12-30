@@ -24,6 +24,7 @@ from controlers.taxas import calcular_taxa_publicacao
 PRODUCT_UPLOAD_DIR = "uploads/produto"
 STATUS_UPLOAD_DIR= "uploads/status"
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
+os.makedirs(STATUS_UPLOAD_DIR, exist_ok=True)
 
 def save_image(file: UploadFile, upload_dir: str, max_size: tuple = (300, 300)) -> str:
     if not file.content_type.startswith("image/"):
