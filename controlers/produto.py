@@ -26,7 +26,8 @@ STATUS_UPLOAD_DIR= "uploads/status"
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(STATUS_UPLOAD_DIR, exist_ok=True)
 
-def save_image(file: UploadFile, upload_dir: str, max_size: tuple = (300, 300)) -> str:
+
+def save_image(file: UploadFile, upload_dir: str, max_size=(300, 300)) -> str:
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="O arquivo enviado não é uma imagem válida.")
     
@@ -45,65 +46,77 @@ def save_image(file: UploadFile, upload_dir: str, max_size: tuple = (300, 300)) 
     
     return unique_filename
 
-def save_images(files: List[UploadFile], upload_dir: str) -> List[str]:
-    return [save_image(file, upload_dir) for file in files]
-
-def create_produto_db_with_image( 
-    db: Session, 
-    produto: ProdutoCreate, 
-    files: List[UploadFile],  
-    user_id: int,
-    extra_files: List[UploadFile]
-):
+# Função para salvar imagens adicionais sem redimensionar
+def save_image_original(file: UploadFile, upload_dir: str) -> str:
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="O arquivo enviado não é uma imagem válida.")
     
+    file_extension = file.filename.split(".")[-1].lower()
+    unique_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = os.path.join(upload_dir, unique_filename)
+    
+    try:
+        with open(file_path, "wb") as buffer:
+            buffer.write(file.file.read())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar a imagem: {str(e)}")
+    
+    return unique_filename
+
+# Função para salvar múltiplas imagens adicionais
+def save_images(files: List[UploadFile], upload_dir: str) -> List[str]:
+    return [save_image_original(file, upload_dir) for file in files]
+
+# Função para criar um produto no banco de dados
+def create_produto_db_with_image(
+    db: Session,
+    produto: ProdutoCreate,
+    files: List[UploadFile],
+    user_id: int,
+    extra_files: List[UploadFile],
+):
     # Verifica se o usuário existe
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-    
+    if not usuario.ativo:
+        raise HTTPException(status_code=403, detail="Você está desativado.")
+
     # Verifica se o usuário passou pela revisão
     info_usuario = db.query(InfoUsuario).filter(InfoUsuario.usuario_id == user_id).first()
-    if not info_usuario:
-        raise HTTPException(status_code=404, detail="Informações do usuário não encontradas.")
-    
-    if info_usuario.revisao != "sim":
+    if not info_usuario or info_usuario.revisao != "sim":
         raise HTTPException(status_code=403, detail="Usuário não passou pela revisão e não pode publicar produtos.")
-    
-    # Verifica se as imagens foram enviadas
+
+    # Verifica se imagens foram enviadas
     if not files:
         raise HTTPException(status_code=400, detail="Nenhuma imagem foi enviada.")
     
-    # Verifica se a conta PRO do usuário expirou
+    # Verifica se a conta PRO expirou
     usuario.verificar_expiracao_pro()
-    
-    # Verifica quantos produtos o usuário já publicou hoje
-    hoje = datetime.utcnow().date()  # Considera a data UTC
+
+    # Verifica limite de publicações diárias
+    hoje = datetime.utcnow().date()
     produtos_hoje = db.query(Produto).filter(
         Produto.CustomerID == user_id,
         Produto.data_publicacao >= hoje
     ).count()
-    
-    LIMITE_DIARIO_NORMAL = 2  # Limite diário de publicações para contas normais
-    
+
+    LIMITE_DIARIO_NORMAL = 2  # Limite diário para contas normais
+
     # Obter a carteira do usuário
     wallet = db.query(Wallet).filter(Wallet.usuario_id == user_id).first()
     if not wallet:
-        wallet = Wallet(usuario_id=usuario.id, saldo_principal=Decimal("0.0"))  # Inicializa com saldo 0
+        wallet = Wallet(usuario_id=usuario.id, saldo_principal=Decimal("0.0"))
         db.add(wallet)
         db.commit()
         db.refresh(wallet)
-    
-    # Calcula a taxa de publicação com base no valor do produto
+
+    # Calcula a taxa de publicação
     taxa_publicacao = calcular_taxa_publicacao(Decimal(produto.preco))
 
     # Verifica limites e custos de publicação
-    if usuario.conta_pro:
-        # Usuários PRO não têm limites diários e não pagam taxas
-        pass
-    else:
-        # Usuários normais têm limite de 2 publicações gratuitas por dia
+    if not usuario.conta_pro:
         if produtos_hoje >= LIMITE_DIARIO_NORMAL:
-            # Se o saldo principal for suficiente, deduz o valor do saldo
             if wallet.saldo_principal >= taxa_publicacao:
                 wallet.saldo_principal -= taxa_publicacao
 
@@ -119,39 +132,34 @@ def create_produto_db_with_image(
                 db.add(transacao)
                 db.commit()
             elif wallet.saldo_principal + wallet.bonus >= taxa_publicacao:
-                # Se não houver saldo principal suficiente, utiliza bônus
                 wallet.bonus -= taxa_publicacao - wallet.saldo_principal
-                wallet.saldo_principal = Decimal("0.0")  # Define saldo principal para 0
+                wallet.saldo_principal = Decimal("0.0")
             else:
                 raise HTTPException(status_code=403, detail="Saldo insuficiente para publicar o produto.")
     
-    # Salva a primeira imagem como capa
+    # Salva a imagem de capa redimensionada
+    #capa_filename = save_image(files[0], PRODUCT_UPLOAD_DIR, max_size=(300, 300))
     capa_filename = save_image(files[0], PRODUCT_UPLOAD_DIR)
-    
-    # Salva as fotos adicionais
+
+    # Salva as imagens adicionais sem redimensionamento
     image_filenames = save_images(extra_files, PRODUCT_UPLOAD_DIR)
     
     # Cria o produto no banco de dados
     db_produto = Produto(
-        **produto.dict(), 
-        capa=capa_filename, 
-        fotos=",".join(image_filenames),  # Armazena as fotos adicionais
-        data_publicacao=datetime.utcnow()  # Adiciona a data de publicação
+        **produto.dict(),
+        capa=capa_filename,
+        fotos=",".join(image_filenames),
+        data_publicacao=datetime.utcnow()
     )
     
     db.add(db_produto)
-    db.commit()  # Commit para salvar o produto
-    
-    # Commit para atualizar o saldo do usuário
     db.commit()
     
-    # Envia notificação de que o usuário publicou um produto
+    # Envia notificação de publicação
     mensagem_notificacao = f"{usuario.nome} publicou um novo produto!"
     enviar_notificacoes_para_seguidores(db, usuario.id, mensagem_notificacao)
     
     return db_produto
-
-
 
 def get_produtos_promovidos(db: Session):
     """
@@ -173,6 +181,11 @@ def seguir_usuario(db: Session, usuario_id: int, seguidor_id: int) -> bool:
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     seguidor = db.query(Usuario).filter(Usuario.id == seguidor_id).first()
 
+    if usuario.ativo==False:
+        raise HTTPException(status_code=404, detail="o usuario esta desactivado")
+    if seguidor.ativo==False:
+        raise HTTPException(status_code=404, detail="voce esta desactivado")
+    
     if not usuario or not seguidor:
         raise HTTPException(status_code=404, detail="Usuário ou seguidor não encontrado.")
     
@@ -324,7 +337,6 @@ def reativar_produto(produto_id: int, current_user: Usuario, db: Session):
     db.commit()
 
     return {"msg": "Produto reativado com sucesso!"}
-
 
 
 def atualizar_status_produtos(db: Session):

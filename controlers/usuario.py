@@ -113,6 +113,8 @@ def criar_status_controller(usuario_id: int, conteudo: str, imagem_url: str, dur
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
+    if usuario.ativo==False:
+        raise HTTPException(status_code=404, detail="voce esta desactivado")
     # Verificar se o usuário tem uma carteira
     if not usuario.wallet:
         raise HTTPException(status_code=400, detail="Carteira não encontrada para o usuário")
