@@ -138,9 +138,38 @@ def get_pedidos_recebidos(db: Session, user_id: int):
 
 def get_pedidos_feitos(db: Session, user_id: int):
     pedidos_feitos = db.query(Pedido).filter(Pedido.customer_id == user_id).all()
+    
     if not pedidos_feitos:
         raise HTTPException(status_code=404, detail="Nenhum pedido encontrado para este usuário.")
-    return pedidos_feitos
+    
+    # Convertendo os pedidos para uma lista de dicionários
+    pedidos_detalhados = [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "tipo": pedido.tipo,
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+            "produto": {
+                "id": pedido.produto.id,
+                "nome": pedido.produto.nome,
+                "descricao": pedido.produto.descricao,
+                "preco": float(pedido.produto.preco)
+            } if pedido.produto else None
+        }
+        for pedido in pedidos_feitos
+    ]
+    
+    return pedidos_detalhados
+
 
 def update_pedido_db(db: Session, pedido_id: int, pedido: PedidoUpdate):
     db_pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()

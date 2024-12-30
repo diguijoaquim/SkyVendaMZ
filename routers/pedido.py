@@ -23,8 +23,8 @@ def confirmar_recebimento_route(pedido_id: int, cliente_id: int, db: Session = D
     return confirmar_recebimento_cliente(db, pedido_id, cliente_id)
 
 @router.post("/{pedido_id}/confirmar-pagamento/")
-def confirmar_pagamento_route(pedido_id: int, vendedor_id: int, db: Session = Depends(get_db)):
-    return confirmar_pagamento_vendedor(db, pedido_id, vendedor_id)
+def confirmar_pagamento_route(pedido_id: int, CustomerID: int, db: Session = Depends(get_db)):
+    return confirmar_pagamento_vendedor(db, pedido_id, CustomerID)
 
 
 @router.delete("/pedidos/{pedido_id}")
@@ -41,7 +41,78 @@ def delete_item_pedido(item_pedido_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="ItemPedido not found")
     return db_item_pedido
 
-@router.put("/pedidos/{pedido_id}")
+
+
+# Rota para listar todos os pedidos feitos pelo usuário autenticado
+@router.get("/pedidos/feitos", response_model=List[dict])
+def get_pedidos_feitos(
+    db: Session = Depends(get_db), 
+    current_user: Usuario = Depends(get_current_user)
+):
+    pedidos_feitos = db.query(Pedido).filter(Pedido.customer_id == current_user.id).all()
+
+    if not pedidos_feitos:
+        raise HTTPException(status_code=404, detail="Nenhum pedido feito encontrado.")
+
+    return [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "tipo": pedido.tipo,
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+        }
+        for pedido in pedidos_feitos
+    ]
+
+
+
+
+# Rota para listar os pedidos recebidos pelo usuário autenticado
+@router.get("/pedidos/recebidos", response_model=List[dict])
+def get_pedidos_recebidos(
+    db: Session = Depends(get_db), 
+    current_user:Usuario = Depends(get_current_user)
+):
+    pedidos_recebidos = (
+        db.query(Pedido)
+        .join(Pedido.produto)  # Relacionamento com Produto
+        .filter(Pedido.produto.has(CustomerID=current_user.id))  # Verifica se o produto pertence ao vendedor atual
+        .all()
+    )
+
+    if not pedidos_recebidos:
+        raise HTTPException(status_code=404, detail="Nenhum pedido recebido encontrado.")
+
+    return [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "tipo": pedido.tipo,
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+        }
+        for pedido in pedidos_recebidos
+    ]
+
+
+@router.put("/pedido/{pedido_id}")
 def update_pedido(pedido_id: int, pedido: PedidoUpdate, db: Session = Depends(get_db)):
     db_pedido = update_pedido(db=db, pedido_id=pedido_id, pedido=pedido)
     if db_pedido is None:
@@ -49,12 +120,12 @@ def update_pedido(pedido_id: int, pedido: PedidoUpdate, db: Session = Depends(ge
     return db_pedido
 
 # Rota para pegar os pedidos recebidos por um usuário específico
-@router.get("/recebidos/{user_id}")
+@router.get("/recebido/{user_id}")
 def pedidos_recebidos(user_id: int, db: Session = Depends(get_db)):
     return get_pedidos_recebidos(db, user_id)
 
 # Rota para pegar os pedidos feitos por um usuário específico
-@router.get("/feitos/{user_id}")
+@router.get("/feito/{user_id}")
 def pedidos_feitos(user_id: int, db: Session = Depends(get_db)):
     return get_pedidos_feitos(db, user_id)
 
@@ -104,4 +175,4 @@ def confirmar_pedid(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    return aceitar_pedido(pedido_id=pedido_id, db=db, vendedor_id=current_user.id)
+    return aceitar_pedido(pedido_id=pedido_id, db=db, CustomerID=current_user.id)
