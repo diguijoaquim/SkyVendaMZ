@@ -67,9 +67,9 @@ def read_pedido(pedido_id: int, db: Session = Depends(get_db)):
 
 @router.post("/pedidos/criar/")
 def criar_pedido(
-    produto_id: int=Form(...),
-    quantidade: int=Form(...),
-    tipo: Optional[str] = Form(None), # O tipo de pedido: "normal" ou "fora do sistema"
+    produto_id: int,
+    quantidade: int,
+    tipo: Optional[str] = "normal",  # O tipo de pedido: "normal" ou "fora do sistema"
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
