@@ -62,7 +62,7 @@ app.mount("/documentos", StaticFiles(directory=os.path.join(BASE_UPLOAD_DIR, "do
 
 # Montar o diretório de estatus
 app.mount("/status", StaticFiles(directory=os.path.join(BASE_UPLOAD_DIR, "status")), name="status")
-
+ 
 # Registrar os routers
 app.include_router(admin_router)
 app.include_router(comentario_router)
