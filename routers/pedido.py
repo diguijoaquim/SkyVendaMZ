@@ -1,7 +1,7 @@
 from controlers.pedido import *
 from schemas import *
 from auth import *
-from fastapi import APIRouter,Form
+from fastapi import APIRouter,Form,Query
 
 router=APIRouter(prefix="/pedidos",tags=["rotas de pedido"])
 
@@ -44,7 +44,7 @@ def delete_item_pedido(item_pedido_id: int, db: Session = Depends(get_db)):
 
 
 # Rota para listar todos os pedidos feitos pelo usuário autenticado
-@router.get("/pedidos/feitos", response_model=List[dict])
+@router.get("/feitos", response_model=List[dict])
 def get_pedidos_feitos(
     db: Session = Depends(get_db), 
     current_user: Usuario = Depends(get_current_user)
@@ -77,7 +77,7 @@ def get_pedidos_feitos(
 
 
 # Rota para listar os pedidos recebidos pelo usuário autenticado
-@router.get("/pedidos/recebidos", response_model=List[dict])
+@router.get("/recebidos", response_model=List[dict])
 def get_pedidos_recebidos(
     db: Session = Depends(get_db), 
     current_user:Usuario = Depends(get_current_user)
@@ -111,6 +111,76 @@ def get_pedidos_recebidos(
         for pedido in pedidos_recebidos
     ]
 
+
+
+
+
+@router.get("/", response_model=List[dict])
+def listar_pedidos(
+    db: Session = Depends(get_db),
+    current_user:Usuario = Depends(get_current_user),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+):
+    # Busca pedidos feitos pelo usuário
+    pedidos_feitos = (
+        db.query(Pedido)
+        .filter(Pedido.customer_id == current_user.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # Busca pedidos recebidos pelo usuário (como vendedor)
+    pedidos_recebidos = (
+        db.query(Pedido)
+        .filter(Pedido.produto.has(CustomerID=current_user.id))  # Produto vinculado ao vendedor
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # Combina os resultados e inclui o tipo de pedido ("feito" ou "recebido")
+    todos_pedidos = [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "tipo_pedido": "feito",  # Pedido feito pelo usuário
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+        }
+        for pedido in pedidos_feitos
+    ] + [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "tipo_pedido": "recebido",  # Pedido recebido pelo usuário
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+        }
+        for pedido in pedidos_recebidos
+    ]
+
+    if not todos_pedidos:
+        raise HTTPException(status_code=404, detail="Nenhum pedido encontrado.")
+
+    return todos_pedidos
 
 @router.put("/pedido/{pedido_id}")
 def update_pedido(pedido_id: int, pedido: PedidoUpdate, db: Session = Depends(get_db)):

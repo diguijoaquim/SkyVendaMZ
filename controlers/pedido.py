@@ -42,7 +42,6 @@ def enviar_notificacao(db: Session, usuario_id: int, mensagem: str):
     return notificacao
 
 
-
 def create_pedido_db(db: Session, pedido: PedidoCreate):
     # Verifica se o produto existe
     produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
@@ -55,6 +54,22 @@ def create_pedido_db(db: Session, pedido: PedidoCreate):
 
     if produto.CustomerID == pedido.customer_id:
         raise HTTPException(status_code=400, detail="Você não pode comprar o seu próprio produto.")
+
+    # **Verifica se há um pedido pendente para o mesmo produto**
+    pedido_pendente = (
+        db.query(Pedido)
+        .filter(
+            Pedido.produto_id == pedido.produto_id,
+            Pedido.customer_id == pedido.customer_id,
+            Pedido.aceito_pelo_vendedor == False  # Pedido ainda não foi aceito
+        )
+        .first()
+    )
+    if pedido_pendente:
+        raise HTTPException(
+            status_code=400,
+            detail="Você já tem um pedido pendente para este produto. Aguarde o vendedor aceitar antes de fazer outro."
+        )
 
     # Calcula o preço total do pedido
     preco_total = pedido.quantidade * produto.preco
