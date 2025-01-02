@@ -1,9 +1,17 @@
 from pydantic import BaseModel,EmailStr,Field, validator,ConfigDict
-from typing import Optional, List
+from typing import Optional,Literal,List
 from datetime import datetime
 import enum
 from fastapi import  UploadFile
 
+
+
+class PromoverProdutoSchema(BaseModel):
+    produto_id: int
+    dias: int
+    titulo: str
+    descricao: str
+    tipo: Literal["ofertas_diarias", "melhores_boladas", "para_si", "em_promocao"]
 
 
 

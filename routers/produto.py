@@ -42,22 +42,27 @@ async def visualizar(status_id: int, db: Session = Depends(get_db)):
     resultado = visualizar_status(status_id=status_id, db=db)
     return resultado
 
-# Rota para promover um produto e criar um anúncio
+
 @router.post("/promover", status_code=201)
 def promover_produto_route(
-    produto_id: int=Form(...),
-    dias: int=Form(...),
-    titulo: str=Form(...),
-    descricao: str=Form(...),
-    tipo: str=Form(...),
+    dados: PromoverProdutoSchema,  # Recebendo o schema Pydantic
     db: Session = Depends(get_db),
-    current_user:Usuario = Depends(get_current_user)  # Verifica o usuário autenticado
+    current_user: Usuario = Depends(get_current_user)  # Verifica o usuário autenticado
 ):
-    # Verifica se o usuário é válido e ativo
+    # Verifica o ID do usuário autenticado
     usuario_id = current_user.id
 
-    # Chama a função de promover produto
-    return promover_produto(produto_id, dias, db, usuario_id, titulo, descricao, tipo)
+    # Chama a função de promover produto, desempacotando os dados do schema
+    return promover_produto(
+        produto_id=dados.produto_id,
+        dias=dados.dias,
+        db=db,
+        usuario_id=usuario_id,
+        titulo=dados.titulo,
+        descricao=dados.descricao,
+        tipo=dados.tipo
+    )
+
 
 @router.post("/{produto_id}/reativar/")
 def reativar_produto_endpoint(produto_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):

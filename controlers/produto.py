@@ -667,6 +667,17 @@ def promover_produto(
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
+    # Verifica se o tipo de anúncio já existe para este produto
+    anuncio_existente = db.query(Anuncio).filter(
+        Anuncio.produto_id == produto_id,
+        Anuncio.tipo_anuncio == tipo
+    ).first()
+
+    if anuncio_existente:
+        raise HTTPException(
+            status_code=400,
+            detail=f"O produto já foi promovido como '{tipo}'. Não é permitido repetir o mesmo tipo de anúncio."
+        )
     # Busca a wallet do usuário
     wallet = db.query(Wallet).filter(Wallet.usuario_id == usuario_id).first()
     if not wallet:
