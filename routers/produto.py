@@ -43,7 +43,7 @@ async def visualizar(status_id: int, db: Session = Depends(get_db)):
     return resultado
 
 # Rota para promover um produto e criar um anúncio
-@router.post("/{produto_id}/promover", status_code=201)
+@router.post("/promover", status_code=201)
 def promover_produto_route(
     produto_id: int=Form(...),
     dias: int=Form(...),
