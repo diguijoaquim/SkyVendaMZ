@@ -45,11 +45,11 @@ async def visualizar(status_id: int, db: Session = Depends(get_db)):
 # Rota para promover um produto e criar um anúncio
 @router.post("/{produto_id}/promover", status_code=201)
 def promover_produto_route(
-    produto_id: int,
-    dias: int,
-    titulo: str,
-    descricao: str,
-    tipo: str,
+    produto_id: int=Form(...),
+    dias: int=Form(...),
+    titulo: str=Form(...),
+    descricao: str=Form(...),
+    tipo: str=Form(...),
     db: Session = Depends(get_db),
     current_user:Usuario = Depends(get_current_user)  # Verifica o usuário autenticado
 ):
