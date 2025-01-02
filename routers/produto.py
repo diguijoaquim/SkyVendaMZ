@@ -41,19 +41,23 @@ def atualizar_status(
 async def visualizar(status_id: int, db: Session = Depends(get_db)):
     resultado = visualizar_status(status_id=status_id, db=db)
     return resultado
+
 # Rota para promover um produto e criar um anúncio
-@router.post("/{produto_id}/promover")
+@router.post("/{produto_id}/promover", status_code=201)
 def promover_produto_route(
     produto_id: int,
-    dias: int, 
-    titulo: str, 
-    descricao: str, 
-    tipo: str, 
-    usuario_id: int, 
-    db: Session = Depends(get_db)
+    dias: int,
+    titulo: str,
+    descricao: str,
+    tipo: str,
+    db: Session = Depends(get_db),
+    current_user:Usuario = Depends(get_current_user)  # Verifica o usuário autenticado
 ):
-    return promover_produto(produto_id, dias, db, usuario_id, titulo, descricao, tipo)
+    # Verifica se o usuário é válido e ativo
+    usuario_id = current_user.id
 
+    # Chama a função de promover produto
+    return promover_produto(produto_id, dias, db, usuario_id, titulo, descricao, tipo)
 
 @router.post("/{produto_id}/reativar/")
 def reativar_produto_endpoint(produto_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):

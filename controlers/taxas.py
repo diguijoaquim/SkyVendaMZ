@@ -61,3 +61,38 @@ def calcular_taxa_postar_status() -> float:
     """
     return 9.0  # Taxa fixa para postar status
 
+
+def calcular_custo_anuncio(tipo: str, dias: int) -> Decimal:
+    """
+    Calcula o custo de um anúncio baseado no tipo de anúncio e no número de dias.
+
+    Tipos de anúncio e seus custos:
+    - "ofertas_diarias": 8 MT por dia
+    - "melhores_boladas": 12 MT por dia
+    - "para_si": 6 MT por dia
+    - "em_promocao": 10 MT por dia
+
+    Args:
+        tipo_anuncio (str): Tipo do anúncio.
+        dias (int): Número de dias que o anúncio ficará ativo.
+
+    Returns:
+        Decimal: Custo total do anúncio.
+    """
+    # Dicionário com os preços por tipo de anúncio
+    precos_por_tipo = {
+        "ofertas_diarias": Decimal("20"),
+        "melhores_boladas": Decimal("50"),
+        "para_si": Decimal("25"),
+        "top": Decimal("30"),
+    }
+
+    # Verifica se o tipo de anúncio é válido
+    if tipo not in precos_por_tipo:
+        raise ValueError(f"Tipo de anúncio inválido: {tipo}")
+
+    # Calcula o custo total
+    preco_por_dia = precos_por_tipo[tipo]
+    custo_total = preco_por_dia * Decimal(dias)
+
+    return custo_total

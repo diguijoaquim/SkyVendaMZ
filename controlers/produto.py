@@ -18,7 +18,7 @@ from slugify import slugify
 from PIL import Image
 from controlers.utils import *
 import shutil
-from controlers.taxas import calcular_taxa_publicacao
+from controlers.taxas import calcular_taxa_publicacao,calcular_custo_anuncio
 
 
 PRODUCT_UPLOAD_DIR = "uploads/produto"
@@ -658,39 +658,60 @@ def get_produtos_by_user(db: Session, user_id: int):
 
 
 
-# Função para promover um produto e criar um anúncio
-def promover_produto(produto_id: int, dias: int, db: Session, usuario_id: int, titulo: str, descricao: str, tipo: str):
+def promover_produto(
+    produto_id: int, dias: int, db: Session, usuario_id: int, titulo: str, descricao: str, tipo: str
+):
     # Busca o produto
     produto = db.query(Produto).filter(Produto.id == produto_id).first()
 
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
-    # Verificar se o usuário tem saldo suficiente
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-    custo_promocao = dias * 0
-    if usuario.saldo < custo_promocao:
+    # Busca a wallet do usuário
+    wallet = db.query(Wallet).filter(Wallet.usuario_id == usuario_id).first()
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Carteira do usuário não encontrada")
+
+    # Calcula o custo da promoção
+    custo_promocao =calcular_custo_anuncio(tipo=tipo, dias=dias)  # Custo fixo de 10 MT por dia
+
+    # Verifica se o saldo principal é suficiente
+    if wallet.saldo_principal < custo_promocao:
         raise HTTPException(status_code=400, detail="Saldo insuficiente para promover o produto")
 
-    # Descontar o saldo do usuário
-    usuario.wallet -= custo_promocao
+    # Desconta o saldo principal
+    wallet.saldo_principal -= custo_promocao
     db.commit()
 
     # Criar o anúncio vinculado ao produto
     anuncio = Anuncio(
         produto_id=produto.id,
-        #usuario_id=usuario.id,
         titulo=titulo,
         descricao=descricao,
         tipo_anuncio=tipo,
         promovido_em=datetime.utcnow(),
-        expira_em=datetime.utcnow() + timedelta(days=dias)
+        expira_em=datetime.utcnow() + timedelta(days=dias),
     )
     db.add(anuncio)
     db.commit()
 
-    return {"message": f"Produto promovido por {dias} dias e colocado em anúncio", "produto": produto, "anuncio": anuncio}
-
+    return {
+        "message": f"Produto promovido por {dias} dias e colocado em anúncio",
+        "produto": {
+            "id": produto.id,
+            "nome": produto.nome,
+            "preco": float(produto.preco),
+        },
+        "anuncio": {
+            "id": anuncio.id,
+            "titulo": anuncio.titulo,
+            "descricao": anuncio.descricao,
+            "promovido_em": anuncio.promovido_em.isoformat(),
+            "expira_em": anuncio.expira_em.isoformat(),
+        },
+        "custo_promocao": float(custo_promocao),
+        "saldo_atual": float(wallet.saldo_principal),
+    }
 def get_produto(db: Session, slug: str):
     """
     Recupera um produto pelo slug e incrementa o número de visualizações.
