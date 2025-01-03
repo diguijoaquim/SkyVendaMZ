@@ -47,7 +47,7 @@ def login_admin(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestF
 
 
 @router.put("/usuario/{usuario_id}/revisao")
-def revisar_usuario(usuario_id: int, nova_revisao: str, motivo: str = None, db: Session = Depends(get_db)):
+def revisar_usuario(usuario_id: int, nova_revisao: str, motivo: str = None, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     # Recupera o InfoUsuario baseado no ID do usuário
     db_info_usuario = db.query(InfoUsuario).filter(InfoUsuario.usuario_id == usuario_id).first()
     if not db_info_usuario:
@@ -62,7 +62,8 @@ def create_admin(
     nome: str = Form(...),
     email: str = Form(...),
     senha: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Rota para criar um administrador usando dados enviados via formulário.
@@ -81,7 +82,7 @@ def create_admin(
 
 
 @router.get("/{admin_id}")
-def read_admins(admin_id: int, db: Session = Depends(get_db)):
+def read_admins(admin_id: int, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     db_admin = get_admin(db=db, admin_id=admin_id)
     if db_admin is None:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -97,7 +98,7 @@ def delete_usuario(usuario_id: int, db: Session = Depends(get_db), current_admin
 
 
 @router.delete("/delete/{admin_id}")
-def delete_admins(admin_id: int, db: Session = Depends(get_db)):
+def delete_admins(admin_id: int, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     db_admin = delete_admin(db=db, admin_id=admin_id)
     if db_admin is None:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -133,7 +134,7 @@ def listar_os_pendentes(db: Session):
 
 
 @router.get("/usuarios/verificados/", response_model=List[dict])
-def obter_usuarios_verificados(db: Session = Depends(get_db)):
+def obter_usuarios_verificados(db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     """
     Rota para obter todos os usuários verificados.
     """
@@ -174,7 +175,7 @@ def obter_usuarios_verificados(db: Session = Depends(get_db)):
 
 
 @router.put("/admins/{admin_id}")
-def update_admins(admin_id: int, admin: AdminUpdate, db: Session = Depends(get_db)):
+def update_admins(admin_id: int, admin: AdminUpdate, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     db_admin = update_admin(db=db, admin_id=admin_id, admin=admin)
     if db_admin is None:
         raise HTTPException(status_code=404, detail="Admin not found")
@@ -182,17 +183,17 @@ def update_admins(admin_id: int, admin: AdminUpdate, db: Session = Depends(get_d
 
 # Rota para desativar o usuário
 @router.put("/usuario/{usuario_id}/desativar")
-def desativar_usuario_route(usuario_id: int, db: Session = Depends(get_db)):
+def desativar_usuario_route(usuario_id: int, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     return desativar_usuario(db, usuario_id)
 
 # Rota para ativar o usuário
 @router.put("/usuario/{usuario_id}/ativar")
-def ativar_usuario_route(usuario_id: int, db: Session = Depends(get_db)):
+def ativar_usuario_route(usuario_id: int, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     return ativar_usuario(db, usuario_id)
 
 
 @router.delete("/categorias/{categoria_id}")
-def delete_categoria(categoria_id: int, db: Session = Depends(get_db)):
+def delete_categoria(categoria_id: int, db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     db_categoria =delete_categoria(db=db, categoria_id=categoria_id)
     if db_categoria is None:
         raise HTTPException(status_code=404, detail="Categoria not found")
@@ -203,7 +204,8 @@ def delete_categoria(categoria_id: int, db: Session = Depends(get_db)):
 def listar_usuarios(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Lista todos os usuários com paginação, incluindo o total de usuários e total de produtos postados por cada um.
@@ -236,7 +238,7 @@ def listar_usuarios(
 
 
 @router.get("/usuarios/pendetes/")
-def obter_usuarios_pendentes(db: Session = Depends(get_db)):
+def obter_usuarios_pendentes(db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     """
     Rota para obter todos os usuários pendentes.
     """
@@ -278,7 +280,7 @@ def obter_usuarios_pendentes(db: Session = Depends(get_db)):
 def listar_usuarios_verificados(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Lista todos os usuários nao verificados , com paginação.
@@ -306,7 +308,8 @@ def listar_produtos_usuario(
     usuario_id: int,
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100)
+    limit: int = Query(10, ge=1, le=100),
+    current_admin: Admin = Depends(get_current_admin)
 ):
     """
     Rota para listar produtos de um usuário específico com paginação.
@@ -333,7 +336,7 @@ def listar_produtos_usuario(
     }
 
 @router.get("/sistema/resumo/", response_model=dict)
-def resumo_sistema(db: Session = Depends(get_db)):
+def resumo_sistema(db: Session = Depends(get_db),current_admin: Admin = Depends(get_current_admin)):
     """
     Retorna um resumo do sistema, incluindo o saldo total, total de produtos ativos e total de usuários.
     """
@@ -365,6 +368,7 @@ def listar_transacoes_usuario(
     page: int = 1,
     page_size: int = 10,
     db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
    
 ):
     """

@@ -118,7 +118,7 @@ def get_pedidos_recebidos(
 @router.get("/", response_model=List[dict])
 def listar_pedidos(
     db: Session = Depends(get_db),
-    current_user:Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(get_current_user),
     offset: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
 ):
@@ -134,11 +134,22 @@ def listar_pedidos(
     # Busca pedidos recebidos pelo usuário (como vendedor)
     pedidos_recebidos = (
         db.query(Pedido)
-        .filter(Pedido.produto.has(CustomerID=current_user.id))  # Produto vinculado ao vendedor
+        .join(Produto, Produto.id == Pedido.produto_id)
+        .filter(Produto.CustomerID == current_user.id)  # Produto vinculado ao vendedor
         .offset(offset)
         .limit(limit)
         .all()
     )
+
+    def obter_dados_produto_e_usuario(pedido):
+        produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+        vendedor = db.query(Usuario).filter(Usuario.id == produto.CustomerID).first()
+        comprador = db.query(Usuario).filter(Usuario.id == pedido.customer_id).first()
+        return {
+            "foto_capa": produto.foto_capa if produto else None,
+            "nome_vendedor": vendedor.nome if vendedor else None,
+            "nome_comprador": comprador.nome if comprador else None,
+        }
 
     # Combina os resultados e inclui o tipo de pedido ("feito" ou "recebido")
     todos_pedidos = [
@@ -151,11 +162,12 @@ def listar_pedidos(
             "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
             "status": pedido.status,
             "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
-            "tipo_pedido": "feito",  # Pedido feito pelo usuário
+            "compra": "compra",  # Pedido feito pelo usuário
             "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
             "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
             "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
             "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+            **obter_dados_produto_e_usuario(pedido),
         }
         for pedido in pedidos_feitos
     ] + [
@@ -168,11 +180,12 @@ def listar_pedidos(
             "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
             "status": pedido.status,
             "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
-            "tipo_pedido": "recebido",  # Pedido recebido pelo usuário
+            "venda": "venda",  # Pedido recebido pelo usuário
             "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
             "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
             "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
             "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+            **obter_dados_produto_e_usuario(pedido),
         }
         for pedido in pedidos_recebidos
     ]
@@ -181,6 +194,7 @@ def listar_pedidos(
         raise HTTPException(status_code=404, detail="Nenhum pedido encontrado.")
 
     return todos_pedidos
+
 
 @router.put("/pedido/{pedido_id}")
 def update_pedido(pedido_id: int, pedido: PedidoUpdate, db: Session = Depends(get_db)):
