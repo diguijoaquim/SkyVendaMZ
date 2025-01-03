@@ -146,7 +146,7 @@ def listar_pedidos(
         vendedor = db.query(Usuario).filter(Usuario.id == produto.CustomerID).first()
         comprador = db.query(Usuario).filter(Usuario.id == pedido.customer_id).first()
         return {
-            "foto_capa": produto.foto_capa if produto else None,
+            "foto_capa": produto.capa if produto else None,
             "nome_vendedor": vendedor.nome if vendedor else None,
             "nome_comprador": comprador.nome if comprador else None,
         }
