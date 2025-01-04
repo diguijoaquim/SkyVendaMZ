@@ -149,6 +149,7 @@ def listar_pedidos(
             "foto_capa": produto.capa if produto else None,
             "nome_vendedor": vendedor.nome if vendedor else None,
             "nome_comprador": comprador.nome if comprador else None,
+            "nome": produto.nome if produto else None,
         }
 
     # Combina os resultados e inclui o tipo de pedido ("feito" ou "recebido")
@@ -253,10 +254,10 @@ def criar_pedido(
     return create_pedido_db(pedido=pedido_data, db=db)
 
 # Rota para confirmar um pedido
-@router.post("/pedidos/{pedido_id}/confirmar/")
+@router.post("/{pedido_id}/confirmar/")
 def confirmar_pedid(
-    pedido_id: int,
+    pedido_id: int=Form(...),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
-    return aceitar_pedido(pedido_id=pedido_id, db=db, CustomerID=current_user.id)
+    return aceitar_pedido(pedido_id=pedido_id, db=db, vendedor_id=current_user.id)
