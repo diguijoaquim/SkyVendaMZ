@@ -256,7 +256,7 @@ def criar_pedido(
 # Rota para confirmar um pedido
 @router.post("/{pedido_id}/confirmar/")
 def confirmar_pedid(
-    pedido_id: int=Form(...),
+    pedido_id: int,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)
 ):
