@@ -5,6 +5,10 @@ from auth import *
 from models import Message, MessageType,Avaliacao
 from fastapi import APIRouter,Form,File,Query
 from decimal import Decimal
+from sqlalchemy.sql.expression import func
+import random
+from uuid import uuid4
+from typing import List
 
 
 router=APIRouter(prefix="/produtos",tags=["rotas de produtos"])
@@ -64,6 +68,62 @@ def promover_produto_route(
     )
 
 
+
+@router.get("/anuncios/tipo", response_model=List[dict])
+def listar_anuncios_aleatorios(
+    tipo_anuncio: str = Query(None, description="Tipo do anúncio para filtrar (opcional)"),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Rota para listar anúncios de forma aleatória, com dados do produto associado.
+    """
+    # Construção da consulta
+    stmt = (
+        select(Anuncio, Produto)
+        .join(Produto, Anuncio.produto_id == Produto.id)
+        .order_by(func.random())  # Ordenação aleatória
+    )
+    
+    # Filtro por tipo de anúncio, se fornecido
+    if tipo_anuncio:
+        stmt = stmt.filter(Anuncio.tipo_anuncio == tipo_anuncio)
+    
+    # Aplicar limite de resultados
+    stmt = stmt.limit(limit)
+
+    # Executar consulta
+    result = db.execute(stmt).all()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Nenhum anúncio encontrado.")
+
+    # Formatação do resultado
+    anuncios = [
+        {
+            "anuncio": {
+                "id": anuncio.id,
+                "titulo": anuncio.titulo,
+                "descricao": anuncio.descricao,
+                "tipo_anuncio": anuncio.tipo_anuncio,
+                "produto_id": anuncio.produto_id,
+                "expira_em": anuncio.expira_em.isoformat() if anuncio.expira_em else None,
+                "promovido_em": anuncio.promovido_em.isoformat() if anuncio.promovido_em else None,
+            },
+            "produto": {
+                "id": produto.id,
+                "nome": produto.nome,
+                "descricao": produto.descricao,
+                "preco": float(produto.preco),
+                "capa": produto.capa,
+                "likes": produto.likes,
+                "views": produto.visualizacoes,
+            },
+        }
+        for anuncio, produto in result
+    ]
+
+    return anuncios
 @router.post("/{produto_id}/reativar/")
 def reativar_produto_endpoint(produto_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return reativar_produto(produto_id=produto_id, current_user=current_user, db=db) 
@@ -434,41 +494,66 @@ def delete_produto(slug: str, db: Session = Depends(get_db), current_user: Usuar
     return {"detail": "Produto deletado com sucesso."}
 
 
-
-@router.put("/produtos/{slug}/imagens")
-async def update_produto_imagens(
+@router.put("/{slug}/capa")
+async def update_produto_capa(
     slug: str,
-    files: List[UploadFile] = File(...),  # Upload de imagens obrigatório
+    capa: UploadFile = File(...),  # Apenas um arquivo é permitido
     current_user: Usuario = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
-    Atualiza as imagens de um produto baseado no slug. Apenas o proprietário do produto pode atualizar as imagens.
+    Atualiza apenas a foto de capa de um produto baseado no slug. 
+    Apenas o proprietário do produto pode fazer a atualização.
     """
-    # Validar os arquivos enviados
-    for file in files:
-        if not isinstance(file, UploadFile):
-            raise HTTPException(
-                status_code=400,
-                detail=f"O arquivo enviado não é válido. Esperado UploadFile, recebido: {type(file).__name__}"
-            )
+    # Validar o arquivo enviado
+    if not capa.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="O arquivo enviado não é uma imagem válida. Certifique-se de enviar uma imagem no formato correto (jpeg, png, etc.)."
+        )
 
     # Buscar produto pelo slug
     db_produto = db.query(Produto).filter(Produto.slug == slug).first()
 
     if db_produto is None:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
 
     # Verificar se o usuário atual é o proprietário do produto
     if db_produto.CustomerID != current_user.id:
         raise HTTPException(status_code=403, detail="Acesso negado. Você não pode atualizar as imagens deste produto.")
 
-    # Atualizar imagens no banco de dados
-    update_produto_imagens_db(db=db, produto=db_produto, files=files)
+    # Salvar a nova imagem
+    nome_arquivo = await salvar_imagem(capa)
 
-    return {"message": "Imagens do produto atualizadas com sucesso."}
+    # Atualizar a foto de capa no banco de dados
+    db_produto.capa = nome_arquivo  # Salvar apenas o nome do arquivo
+    db.commit()
+    db.refresh(db_produto)
+
+    return {
+        "message": "Foto de capa do produto atualizada com sucesso.",
+        "capa": nome_arquivo,
+    }
 
 
+async def salvar_imagem(arquivo: UploadFile) -> str:
+    """
+    Salva a imagem enviada e retorna apenas o nome do arquivo gerado.
+    """
+    # Gerar um nome único para a imagem
+    nome_arquivo = f"{uuid4().hex}_{arquivo.filename}"
+    caminho_pasta = os.path.join("uploads", "produto")  # Diretório onde os arquivos serão salvos
+    caminho_completo = os.path.join(caminho_pasta, nome_arquivo)
+
+    # Certifique-se de que o diretório existe
+    os.makedirs(caminho_pasta, exist_ok=True)
+
+    # Salvar o arquivo no sistema de arquivos
+    with open(caminho_completo, "wb") as f:
+        f.write(await arquivo.read())
+
+    # Retornar apenas o nome do arquivo gerado
+    return nome_arquivo
 
 
 
