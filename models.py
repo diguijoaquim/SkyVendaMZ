@@ -346,6 +346,8 @@ class Pedido(Base):
     produto_id = Column(Integer, ForeignKey("produto.id"))
     quantidade = Column(Integer, nullable=False)
     preco_total = Column(DECIMAL)
+    status_visivel_comprador = Column(Boolean, default=False)  # Status visível para o comprador
+    status_visivel_vendedor = Column(Boolean, default=False)
     data_pedido = Column(DateTime, default=datetime.utcnow)
     status = Column(String(350))  # Estado do pedido: "Pendente", "Aceito", "Enviado", "Entregue", "Cancelado"
     aceito_pelo_vendedor = Column(Boolean, default=False)

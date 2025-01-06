@@ -159,9 +159,6 @@ def get_pedidos_recebidos(
     ]
 
 
-
-
-
 @router.get("/", response_model=List[dict])
 def listar_pedidos(
     db: Session = Depends(get_db),
@@ -169,20 +166,33 @@ def listar_pedidos(
     offset: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
 ):
-    # Busca pedidos feitos pelo usuário
+    """
+    Lista pedidos feitos pelo usuário e pedidos recebidos (como vendedor),
+    excluindo aqueles com status 'Eliminado' ou com 'status_visivel_comprador' ou 
+    'status_visivel_vendedor' marcado como True.
+    """
+    # Filtro para excluir pedidos eliminados
     pedidos_feitos = (
         db.query(Pedido)
-        .filter(Pedido.customer_id == current_user.id)
+        .filter(
+            Pedido.customer_id == current_user.id,
+            Pedido.status != "Eliminado",  # Excluindo pedidos eliminados
+            Pedido.status_visivel_comprador == False  # Pedido não eliminado para o comprador
+        )
         .offset(offset)
         .limit(limit)
         .all()
     )
 
-    # Busca pedidos recebidos pelo usuário (como vendedor)
+    # Filtro para pedidos recebidos (como vendedor)
     pedidos_recebidos = (
         db.query(Pedido)
         .join(Produto, Produto.id == Pedido.produto_id)
-        .filter(Produto.CustomerID == current_user.id)  # Produto vinculado ao vendedor
+        .filter(
+            Produto.CustomerID == current_user.id,  # Produto vinculado ao vendedor
+            Pedido.status != "Eliminado",  # Excluindo pedidos eliminados
+            Pedido.status_visivel_vendedor == False  # Pedido não eliminado para o vendedor
+        )
         .offset(offset)
         .limit(limit)
         .all()
@@ -199,7 +209,7 @@ def listar_pedidos(
             "nome": produto.nome if produto else None,
         }
 
-    # Combina os resultados e inclui o tipo de pedido ("feito" ou "recebido")
+    # Combina os resultados e inclui o tipo de pedido ("compra" ou "venda")
     todos_pedidos = [
         {
             "id": pedido.id,
@@ -242,6 +252,164 @@ def listar_pedidos(
         raise HTTPException(status_code=404, detail="Nenhum pedido encontrado.")
 
     return todos_pedidos
+
+@router.put("/{pedido_id}/eliminar")
+def eliminar_pedido(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Rota para eliminar um pedido, tanto pelo vendedor quanto pelo comprador.
+    O status global do pedido será alterado para 'Eliminado' quando ambas as partes o eliminarem.
+    Só funciona para pedidos 'Cancelados' ou 'Concluídos'.
+    """
+    # Buscar o pedido no banco de dados
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+
+    # Verificar se o status do pedido permite exclusão
+    if pedido.status not in ["Cancelado", "Concluido","recusado"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Apenas pedidos com status 'Cancelado' ou 'Concluído' podem ser eliminados.",
+        )
+
+    # Verificar se o usuário é o comprador ou o vendedor
+    produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto associado ao pedido não encontrado.")
+
+    is_comprador = pedido.customer_id == current_user.id
+    is_vendedor = produto.CustomerID == current_user.id
+
+    if not is_comprador and not is_vendedor:
+        raise HTTPException(
+            status_code=403, detail="Você não tem permissão para eliminar este pedido."
+        )
+
+    # Marcar como eliminado para o comprador ou vendedor
+    if is_comprador:
+        pedido.recebido_pelo_cliente = True  # Marcando como eliminado pelo cliente
+        mensagem = "Pedido eliminado para o comprador."
+        # Atualiza status visível para o comprador
+        pedido.status_visivel_comprador = True  # Coloca como True (eliminado para o comprador)
+    if is_vendedor:
+        pedido.aceito_pelo_vendedor = True  # Marcando como eliminado pelo vendedor
+        mensagem = "Pedido eliminado para o vendedor."
+        # Atualiza status visível para o vendedor
+        pedido.status_visivel_vendedor = True  # Coloca como True (eliminado para o vendedor)
+
+    # Alterar status para 'Eliminado' se ambos já eliminaram
+    if pedido.recebido_pelo_cliente and pedido.aceito_pelo_vendedor:
+        pedido.status = "Eliminado"
+
+    # Commit das mudanças
+    db.commit()
+
+    # Retornar a resposta
+    return {
+        "id": pedido.id,
+        "status": pedido.status,
+        "mensagem": mensagem,
+        "status_visivel_comprador": pedido.status_visivel_comprador,
+        "status_visivel_vendedor": pedido.status_visivel_vendedor,
+    }
+
+
+@router.get("/eliminados", response_model=List[dict])
+def listar_pedidos_eliminados(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+):
+    """
+    Lista pedidos eliminados feitos pelo usuário (como comprador) e recebidos (como vendedor).
+    """
+    # Busca pedidos eliminados feitos pelo usuário (como comprador)
+    pedidos_feitos_eliminados = (
+        db.query(Pedido)
+        .filter(
+            Pedido.customer_id == current_user.id,
+            Pedido.status == "Eliminado",  # Apenas pedidos eliminados
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # Busca pedidos eliminados recebidos pelo usuário (como vendedor)
+    pedidos_recebidos_eliminados = (
+        db.query(Pedido)
+        .join(Produto, Produto.id == Pedido.produto_id)
+        .filter(
+            Produto.CustomerID == current_user.id,  # Produto vinculado ao vendedor
+            Pedido.status == "Eliminado",  # Apenas pedidos eliminados
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    def obter_dados_produto_e_usuario(pedido):
+        produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+        vendedor = db.query(Usuario).filter(Usuario.id == produto.CustomerID).first()
+        comprador = db.query(Usuario).filter(Usuario.id == pedido.customer_id).first()
+        return {
+            "foto_capa": produto.capa if produto else None,
+            "nome_vendedor": vendedor.nome if vendedor else None,
+            "nome_comprador": comprador.nome if comprador else None,
+            "nome": produto.nome if produto else None,
+        }
+
+    # Combina os resultados e inclui o tipo de pedido ("compra" ou "venda")
+    todos_pedidos_eliminados = [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "compra": "compra",  # Pedido feito pelo usuário
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+            **obter_dados_produto_e_usuario(pedido),
+        }
+        for pedido in pedidos_feitos_eliminados
+    ] + [
+        {
+            "id": pedido.id,
+            "customer_id": pedido.customer_id,
+            "produto_id": pedido.produto_id,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
+            "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
+            "status": pedido.status,
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "venda": "venda",  # Pedido recebido pelo usuário
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+            "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+            "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+            **obter_dados_produto_e_usuario(pedido),
+        }
+        for pedido in pedidos_recebidos_eliminados
+    ]
+
+    if not todos_pedidos_eliminados:
+        raise HTTPException(status_code=404, detail="Nenhum pedido eliminado encontrado.")
+
+    return todos_pedidos_eliminados
+
 
 
 @router.put("/pedido/{pedido_id}")
