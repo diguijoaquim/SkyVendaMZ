@@ -198,21 +198,37 @@ def update_pedido_db(db: Session, pedido_id: int, pedido: PedidoUpdate):
     db.refresh(db_pedido)
     return db_pedido
 
-def delete_pedido(db: Session, pedido_id: int):
-    db_pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
-    if not db_pedido:
+def cancelar_pedido(db: Session, pedido_id: int, usuario_id: int):
+    # Obtém o pedido a partir do ID
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
-    if db_pedido.aceito_pelo_vendedor ==1:
-        raise HTTPException(status_code=403,detail="nao pode cancelar o pedido, o seu produto esta a caminho")
-    # Liberar saldo congelado do comprador
-    wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == db_pedido.customer_id).first()
-    if wallet_comprador:
-        wallet_comprador.saldo_principal += db_pedido.preco_total
-        wallet_comprador.saldo_congelado -= db_pedido.preco_total
 
-    db.delete(db_pedido)
+    # Verifica se o pedido pertence ao usuário
+    if pedido.customer_id != usuario_id:
+        raise HTTPException(status_code=403, detail="Você não tem permissão para cancelar este pedido.")
+
+    # Verifica se o pedido já foi aceito pelo vendedor ou enviado
+    if pedido.aceito_pelo_vendedor or pedido.status in ["Aceito pelo Vendedor", "Concluído"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível cancelar este pedido, pois ele já foi aceito ou está a caminho."
+        )
+
+    # Libera o saldo congelado do comprador (se o tipo do pedido for "SkyWallet")
+    if pedido.tipo == "SkyWallet":
+        wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == usuario_id).first()
+        if wallet_comprador:
+            wallet_comprador.saldo_principal += pedido.preco_total
+            wallet_comprador.saldo_congelado -= pedido.preco_total
+
+    # Atualiza o status do pedido para "Cancelado"
+    pedido.status = "Cancelado"
     db.commit()
-    return db_pedido
+    db.refresh(pedido)
+
+    return {"mensagem": "Pedido cancelado com sucesso.", "status": pedido.status}
+
 
 def aceitar_pedido(db: Session, pedido_id: int, vendedor_id: int):
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()

@@ -27,12 +27,59 @@ def confirmar_pagamento_route(pedido_id: int, CustomerID: int, db: Session = Dep
     return confirmar_pagamento_vendedor(db, pedido_id, CustomerID)
 
 
-@router.delete("/pedidos/{pedido_id}")
-def delete_pedidos(pedido_id: int, db: Session = Depends(get_db)):
-    db_pedido =delete_pedido(db=db, pedido_id=pedido_id)
-    if db_pedido is None:
-        raise HTTPException(status_code=404, detail="Pedido not found")
-    return db_pedido
+@router.put("/{pedido_id}/cancelar")
+def cancelar_pedido_route(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Rota para cancelar um pedido baseado no ID do pedido e do usuário autenticado.
+    """
+    try:
+        resultado = cancelar_pedido(db, pedido_id, current_user.id)
+        return resultado
+    except HTTPException as e:
+        raise e
+
+
+@router.put("/pedidos/{pedido_id}/recusar")
+def recusar_pedido_pelo_vendedor(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    current_user:Usuario = Depends(get_current_user),
+):
+    """
+    Rota para que o vendedor recuse um pedido baseado no ID do pedido.
+    """
+    # Buscar o pedido no banco de dados
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+
+    # Verificar se o usuário autenticado é o vendedor do produto
+    produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+
+    if not produto or produto.CustomerID != current_user.id:  # Assumindo que Produto tem o campo 'vendedor_id'
+        raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este pedido.")
+
+    # Verificar se o status do pedido é "Pendente"
+    if pedido.status != "Pendente":
+        raise HTTPException(status_code=400, detail="Apenas pedidos pendentes podem ser recusados.")
+
+    # Atualizar o status do pedido para "Recusado"
+    pedido.status = "recusado"
+    db.commit()
+    db.refresh(pedido)
+
+    return {
+        "id": pedido.id,
+        "status": pedido.status,
+        "mensagem": "Pedido recusado com sucesso pelo vendedor."
+    }
+
+
 
 @router.delete("/item_pedidos/{item_pedido_id}")
 def delete_item_pedido(item_pedido_id: int, db: Session = Depends(get_db)):
@@ -85,7 +132,7 @@ def get_pedidos_recebidos(
     pedidos_recebidos = (
         db.query(Pedido)
         .join(Pedido.produto)  # Relacionamento com Produto
-        .filter(Pedido.produto.has(CustomerID=current_user.id))  # Verifica se o produto pertence ao vendedor atual
+        .filter(Pedido.produto.has(vendedor_id=current_user.id))  # Verifica se o produto pertence ao vendedor atual
         .all()
     )
 
