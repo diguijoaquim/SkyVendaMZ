@@ -134,7 +134,10 @@ class Usuario(Base):
     # Relacionamentos para mensagens
     sent_messages = relationship("Message", foreign_keys=[Message.sender_id], back_populates="sender")
     received_messages = relationship("Message", foreign_keys=[Message.receiver_id], back_populates="receiver")
-
+    referenciador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)  # Referência ao usuário que fez a indicação
+    
+    # Relacionamento para contar os usuários referenciados
+    referencias = relationship("Usuario", backref="referenciador", remote_side=[id])
     # Relacionamento com a tabela Wallet
     wallet = relationship("Wallet", back_populates="usuario", uselist=False)  # Supondo que exista um relacionamento um-para-um
     pedidos = relationship("Pedido", backref="usuario")
@@ -152,6 +155,22 @@ class Usuario(Base):
         secondary="produto_likes",  # Certifique-se de que o nome da tabela de associação está correto
         back_populates="usuarios_que_deram_like"
     )
+
+
+
+class Referencia(Base):
+    __tablename__ = "referencias"
+
+    id = Column(Integer, primary_key=True, index=True)
+    referenciador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)  # Quem fez a indicação
+    referenciado_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)  # Quem foi indicado
+    data_criacao = Column(DateTime, default=datetime.utcnow)  # Quando foi criada a referência
+
+    # Relacionamentos
+    referenciador = relationship("Usuario", foreign_keys=[referenciador_id], backref="referencias_feitas")
+    referenciado = relationship("Usuario", foreign_keys=[referenciado_id], backref="referencias_recebidas")
+
+
 
 class Admin(Base):
     __tablename__ = "admin"
@@ -188,6 +207,36 @@ class Publicacao(Base):
 
     # Relacionamento com o modelo Usuario
     usuario = relationship("Usuario", back_populates="publicacoes")
+
+    # Relacionamento com likes e comentários específicos de publicações
+    likes = relationship("LikePublicacao", back_populates="publicacao", cascade="all, delete-orphan")
+    comentarios = relationship("ComentarioPublicacao", back_populates="publicacao", cascade="all, delete-orphan")
+
+
+class LikePublicacao(Base):
+    __tablename__ = "likes_publicacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    publicacao_id = Column(Integer, ForeignKey("publicacoes.id"))
+
+    # Relacionamentos
+    usuario = relationship("Usuario")
+    publicacao = relationship("Publicacao", back_populates="likes")
+
+
+class ComentarioPublicacao(Base):
+    __tablename__ = "comentarios_publicacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    publicacao_id = Column(Integer, ForeignKey("publicacoes.id"))
+    conteudo = Column(Text, nullable=False)
+    data_criacao = Column(DateTime, default=func.now())
+
+    # Relacionamentos
+    usuario = relationship("Usuario")
+    publicacao = relationship("Publicacao", back_populates="comentarios")
 
 class Pesquisa(Base):
     __tablename__ = "pesquisas"

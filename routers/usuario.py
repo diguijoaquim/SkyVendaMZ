@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
 from sqlalchemy.orm import Session
 from models import Usuario, Transacao, Publicacao, Notificacao,Seguidor
 from schemas import *
+import random
 from database import SessionLocal
 from fastapi.security import OAuth2PasswordRequestForm
 from models import *
@@ -216,7 +217,8 @@ def read_perfil(
     # Busca os seguidores
     seguidores = db.query(Seguidor).filter_by(usuario_id=perfil.id).all()
     total_seguidores = len(seguidores)
-
+    referencias = db.query(Usuario).filter(Usuario.referenciador_id == current_user.id).all()
+    
     # Adiciona informações dos seguidores (ID e username)
     seguidores_info = [
         {"id": seguidor.seguidor.id, "username": seguidor.seguidor.username} 
@@ -233,6 +235,7 @@ def read_perfil(
         "id_unico":perfil.identificador_unico,
         "conta_pro": perfil.conta_pro,  # Indica se a conta é PRO
         "tipo": perfil.tipo,
+        "ref":perfil.referencias,
         "perfil": perfil.foto_perfil,
         "revisado": perfil.revisao,
         "status_postado": status_postado,
@@ -347,17 +350,98 @@ def desativar_conta_pro(usuario_id: int, db: Session = Depends(get_db)):
 
     return {"message": "Conta PRO desativada com sucesso.", "usuario": db_usuario}
 
-# Rota para listar todas as publicações
+
 @router.get("/publicacoes/")
-def listar_publicacoes(db: Session = Depends(get_db)):
-    # Buscar todas as publicações no banco de dados
-    publicacoes = db.query(Publicacao).all()
-    
+def listar_publicacoes(
+    usuario_id: Optional[int] = None,
+    page: int = 1,
+    per_page: int = 10,
+    seed: Optional[int] = None,  # Seed para garantir ordem consistente
+    db: Session = Depends(get_db)
+):
+    """
+    Lista publicações aleatoriamente com paginação.
+    Inclui informações:
+    - Total de likes e comentários
+    - Dados dos comentários (pessoa, foto, etc.)
+    - Dados do publicador (nome, foto)
+    - Se o usuário deu like (opcional)
+    """
+    # Buscar todas as publicações
+    publicacoes_query = db.query(Publicacao).all()
+
     # Verificar se há publicações
-    if not publicacoes:
+    if not publicacoes_query:
         raise HTTPException(status_code=404, detail="Nenhuma publicação encontrada.")
-    
-    return publicacoes
+
+    # Embaralhar a lista de publicações
+    if seed is None:
+        seed = random.randint(1, 1000000)  # Seed aleatória se não for fornecida
+    random.seed(seed)
+    random.shuffle(publicacoes_query)
+
+    # Aplicar paginação manualmente
+    total_publicacoes = len(publicacoes_query)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    publicacoes_paginadas = publicacoes_query[start_idx:end_idx]
+
+    # Preparar o resultado com informações adicionais
+    resultado = []
+    for publicacao in publicacoes_paginadas:
+        # Obter total de likes e comentários
+        total_likes = db.query(LikePublicacao).filter(LikePublicacao.publicacao_id == publicacao.id).count()
+        total_comentarios = db.query(ComentarioPublicacao).filter(ComentarioPublicacao.publicacao_id == publicacao.id).count()
+
+        # Verificar se o usuário deu like
+        deu_like = False
+        if usuario_id:
+            deu_like = db.query(LikePublicacao).filter(
+                LikePublicacao.publicacao_id == publicacao.id,
+                LikePublicacao.usuario_id == usuario_id
+            ).first() is not None
+
+        # Obter informações de quem comentou
+        comentarios = db.query(ComentarioPublicacao).filter(ComentarioPublicacao.publicacao_id == publicacao.id).all()
+        detalhes_comentarios = [
+            {
+                "id": comentario.id,
+                "conteudo": comentario.conteudo,
+                "data_criacao": comentario.data_criacao.isoformat(),
+                "usuario": {
+                    "id": comentario.usuario.id,
+                    "nome": comentario.usuario.nome,
+                    "foto_perfil": comentario.usuario.foto_perfil,
+                }
+            }
+            for comentario in comentarios
+        ]
+
+        # Obter dados do publicador
+        publicador = publicacao.usuario
+
+        resultado.append({
+            "id": publicacao.id,
+            "conteudo": publicacao.conteudo,
+            "publicador": {
+                "id": publicador.id,
+                "nome": publicador.nome,
+                "foto_perfil": publicador.foto_perfil,
+            },
+            "total_likes": total_likes,
+            "total_comentarios": total_comentarios,
+            "comentarios": detalhes_comentarios,
+            "deu_like": deu_like,
+        })
+
+    # Retornar resultado paginado
+    return {
+        "total": total_publicacoes,
+        "page": page,
+        "per_page": per_page,
+        "seed": seed,  # Retornamos a seed para consistência
+        "items": resultado
+    }
 
 @router.post("/{usuario_id}/seguir")
 def seguir_usuario_route(
@@ -687,7 +771,6 @@ def publicar_texto(user_id: int, publicacao: PublicacaoCreate, db: Session = Dep
 
     return {"msg": "Publicação criada com sucesso!", "publicacao": nova_publicacao}
 
-
 @router.post("/cadastro")
 def create_usuario_endpoint(
     nome: str = Form(...),
@@ -695,9 +778,14 @@ def create_usuario_endpoint(
     email: EmailStr = Form(...),
     senha: Optional[str] = Form(None),
     tipo: Optional[str] = Form(None),
+    referencia: Optional[str] = Query(None),  # Recebe o identificador do referenciador
     db: Session = Depends(get_db)
 ):
-    # Verifica se o usuário já existe com o mesmo email ou username
+    """
+    Rota para cadastrar um novo usuário. Se um link de referência for usado,
+    vincula o novo usuário ao referenciador.
+    """
+    # Verifica se já existe um usuário com o mesmo email ou username
     existing_user = db.query(Usuario).filter(
         (Usuario.email == email) | (Usuario.username == username)
     ).first()
@@ -709,32 +797,79 @@ def create_usuario_endpoint(
         )
 
     # Gera o identificador único
-   
+    identificador_unico = gerar_identificador_unico(db)
+
+    # Verifica se o identificador de referência é válido
+    referenciador = None
+    if referencia:
+        referenciador = db.query(Usuario).filter(Usuario.identificador_unico == referencia).first()
+        if not referenciador:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Link de referência inválido."
+            )
 
     # Cria o novo usuário
-    novo_usuario = register_user(
-        db=db,
+    novo_usuario = Usuario(
         nome=nome,
         username=username,
         email=email,
         senha=senha,
-        tipo=tipo or "cliente",  # Define "cliente" como tipo padrão, se não especificado
-       
+        tipo=tipo or "cliente",
+        identificador_unico=identificador_unico,
+        referenciador_id=referenciador.id if referenciador else None  # Associa ao referenciador
     )
 
     db.add(novo_usuario)
     db.commit()
     db.refresh(novo_usuario)
 
+    # Gerar o link de referência do novo usuário
+    link_referencia = f"https://skyvenda-mz.vercel.app/ref/{novo_usuario.identificador_unico}"
+
     return {
         "id": novo_usuario.id,
         "identificador_unico": novo_usuario.identificador_unico,
-        "nome": novo_usuario.nome,
-        "username": novo_usuario.username,
-        "email": novo_usuario.email,
-        "tipo": novo_usuario.tipo,
+        "link_referencia": link_referencia,
+       # Quantas referências ele tem
         "mensagem": "Usuário cadastrado com sucesso!"
     }
+
+
+
+
+
+@router.get("/referencias", response_model=dict)
+def listar_referencias(
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos os usuários que se cadastraram usando o link de referência do usuário atual.
+    Também retorna o total de referências.
+    """
+
+    # Verifica se o usuário possui referências
+    referencias = db.query(Usuario).filter(Usuario.referenciador_id == current_user.id).all()
+
+    # Formata os dados de resposta
+    usuarios_referenciados = [
+        {
+            "id": usuario.id,
+            "nome": usuario.nome,
+            "username": usuario.username,
+            "email": usuario.email,
+            "data_cadastro": usuario.data_cadastro.isoformat()
+        }
+        for usuario in referencias
+    ]
+
+    return {
+        "total_referencias": len(usuarios_referenciados),
+        "usuarios": usuarios_referenciados
+    }
+
+
 
 @router.get("/pro/")
 def listar_usuarios_pro(db: Session = Depends(get_db)):

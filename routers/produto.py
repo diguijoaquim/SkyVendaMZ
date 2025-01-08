@@ -116,6 +116,7 @@ def listar_anuncios_aleatorios(
                 "descricao": produto.descricao,
                 "preco": float(produto.preco),
                 "capa": produto.capa,
+                "slug": produto.slug,
                 "likes": produto.likes,
                 "views": produto.visualizacoes,
             },
@@ -861,3 +862,110 @@ def obter_categorias_populares(db: Session = Depends(get_db)):
     if not categorias:
         raise HTTPException(status_code=404, detail="Nenhuma interação encontrada no sistema.")
     return categorias
+
+
+
+
+@router.post("/publicacoes/{publicacao_id}/like")
+def like_publicacao(
+    publicacao_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Adiciona ou remove um like de uma publicação.
+    """
+    publicacao = db.query(Publicacao).filter(Publicacao.id == publicacao_id).first()
+
+    if not publicacao:
+        raise HTTPException(status_code=404, detail="Publicação não encontrada.")
+
+    # Verifica se o usuário já deu like
+    like = db.query(LikePublicacao).filter(
+        LikePublicacao.publicacao_id == publicacao_id,
+        LikePublicacao.usuario_id == current_user.id
+    ).first()
+
+    if like:
+        # Remove o like
+        db.delete(like)
+        db.commit()
+        return {"mensagem": "Like removido com sucesso."}
+
+    # Adiciona o like
+    novo_like = LikePublicacao(usuario_id=current_user.id, publicacao_id=publicacao_id)
+    db.add(novo_like)
+    db.commit()
+
+    return {"mensagem": "Like adicionado com sucesso."}
+
+
+@router.post("/publicacoes/{publicacao_id}/comentario")
+def comentar_publicacao(
+    publicacao_id: int,
+    conteudo: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Adiciona um comentário a uma publicação.
+    """
+    publicacao = db.query(Publicacao).filter(Publicacao.id == publicacao_id).first()
+
+    if not publicacao:
+        raise HTTPException(status_code=404, detail="Publicação não encontrada.")
+
+    # Adiciona o comentário
+    novo_comentario = ComentarioPublicacao(
+        usuario_id=current_user.id,
+        publicacao_id=publicacao_id,
+        conteudo=conteudo
+    )
+    db.add(novo_comentario)
+    db.commit()
+
+    return {"mensagem": "Comentário adicionado com sucesso."}
+
+
+@router.get("/publicacoes/{publicacao_id}/detalhes")
+def detalhes_publicacao(
+    publicacao_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna os detalhes da publicação, incluindo likes e comentários.
+    """
+    publicacao = db.query(Publicacao).filter(Publicacao.id == publicacao_id).first()
+
+    if not publicacao:
+        raise HTTPException(status_code=404, detail="Publicação não encontrada.")
+
+    # Contar likes
+    total_likes = db.query(LikePublicacao).filter(LikePublicacao.publicacao_id == publicacao_id).count()
+
+    # Obter comentários
+    comentarios = db.query(ComentarioPublicacao).filter(ComentarioPublicacao.publicacao_id == publicacao_id).all()
+
+    return {
+        "id": publicacao.id,
+        "conteudo": publicacao.conteudo,
+        "usuario": {
+            "id": publicacao.usuario.id,
+            "nome": publicacao.usuario.nome,
+            "username": publicacao.usuario.username
+        },
+        "likes": total_likes,
+        "comentarios": [
+            {
+                "id": comentario.id,
+                "conteudo": comentario.conteudo,
+                "data_criacao": comentario.data_criacao.isoformat(),
+                "usuario": {
+                    "id": comentario.usuario.id,
+                    "nome": comentario.usuario.nome,
+                    "username": comentario.usuario.username
+                }
+            }
+            for comentario in comentarios
+        ]
+    }
