@@ -49,35 +49,46 @@ def recusar_pedido_pelo_vendedor(
     db: Session = Depends(get_db),
     current_user:Usuario = Depends(get_current_user),
 ):
-    """
-    Rota para que o vendedor recuse um pedido baseado no ID do pedido.
-    """
-    # Buscar o pedido no banco de dados
-    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
 
+    """
+    Recusa um pedido e libera os saldos congelados.
+    """
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
 
-    # Verificar se o usuário autenticado é o vendedor do produto
     produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
-
-    if not produto or produto.CustomerID != current_user.id:  # Assumindo que Produto tem o campo 'vendedor_id'
+    if not produto or produto.CustomerID != current_user.id:
         raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este pedido.")
 
-    # Verificar se o status do pedido é "Pendente"
     if pedido.status != "Pendente":
         raise HTTPException(status_code=400, detail="Apenas pedidos pendentes podem ser recusados.")
 
-    # Atualizar o status do pedido para "Recusado"
-    pedido.status = "recusado"
-    db.commit()
-    db.refresh(pedido)
+    try:
+        if pedido.tipo == "skywallet":
+            # Liberar saldo congelado do comprador
+            wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == pedido.customer_id).first()
+            if wallet_comprador and wallet_comprador.saldo_congelado >= pedido.preco_total:
+                wallet_comprador.saldo_congelado -= pedido.preco_total
+                wallet_comprador.saldo_principal += pedido.preco_total
 
-    return {
-        "id": pedido.id,
-        "status": pedido.status,
-        "mensagem": "Pedido recusado com sucesso pelo vendedor."
-    }
+            # Liberar saldo congelado do vendedor
+            wallet_vendedor = db.query(Wallet).filter(Wallet.usuario_id == produto.CustomerID).first()
+            if wallet_vendedor and wallet_vendedor.saldo_congelado >= pedido.preco_total:
+                wallet_vendedor.saldo_congelado -= pedido.preco_total
+
+        pedido.status = "recusado"
+        db.commit()
+
+        return {
+            "id": pedido.id,
+            "status": pedido.status,
+            "mensagem": "Pedido recusado com sucesso pelo vendedor e saldo liberado."
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao recusar pedido: {str(e)}")
+
 
 
 

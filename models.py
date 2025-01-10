@@ -344,7 +344,7 @@ class Anuncio(Base):
     produto_id = Column(Integer, ForeignKey("produto.id"), unique=True)
     promovido_em = Column(DateTime, default=datetime.utcnow)
     expira_em = Column(DateTime, nullable=True)
-    
+    ativo = Column(Boolean, nullable=False, default=True)
     produto = relationship('Produto', back_populates='anuncio')
 
     def definir_promocao(self, dias: int):

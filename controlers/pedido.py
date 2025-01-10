@@ -198,37 +198,49 @@ def update_pedido_db(db: Session, pedido_id: int, pedido: PedidoUpdate):
     db.refresh(db_pedido)
     return db_pedido
 
+
 def cancelar_pedido(db: Session, pedido_id: int, usuario_id: int):
-    # Obtém o pedido a partir do ID
+    """
+    Cancela um pedido e libera os saldos congelados.
+    """
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
 
-    # Verifica se o pedido pertence ao usuário
     if pedido.customer_id != usuario_id:
         raise HTTPException(status_code=403, detail="Você não tem permissão para cancelar este pedido.")
 
-    # Verifica se o pedido já foi aceito pelo vendedor ou enviado
-    if pedido.aceito_pelo_vendedor or pedido.status in ["Aceito pelo Vendedor", "Concluído"]:
+    if pedido.status not in ["Pendente", "Aceito pelo Vendedor"]:
         raise HTTPException(
             status_code=400,
-            detail="Não é possível cancelar este pedido, pois ele já foi aceito ou está a caminho."
+            detail="Não é possível cancelar este pedido no estado atual."
         )
 
-    # Libera o saldo congelado do comprador (se o tipo do pedido for "SkyWallet")
-    if pedido.tipo == "SkyWallet":
-        wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == usuario_id).first()
-        if wallet_comprador:
-            wallet_comprador.saldo_principal += pedido.preco_total
-            wallet_comprador.saldo_congelado -= pedido.preco_total
+    try:
+        if pedido.tipo == "skywallet":
+            # Liberar saldo congelado do comprador
+            wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == usuario_id).first()
+            if wallet_comprador and wallet_comprador.saldo_congelado >= pedido.preco_total:
+                wallet_comprador.saldo_congelado -= pedido.preco_total
+                wallet_comprador.saldo_principal += pedido.preco_total
 
-    # Atualiza o status do pedido para "Cancelado"
-    pedido.status = "Cancelado"
-    db.commit()
-    db.refresh(pedido)
+            # Liberar saldo congelado do vendedor
+            produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+            if produto:
+                wallet_vendedor = db.query(Wallet).filter(Wallet.usuario_id == produto.CustomerID).first()
+                if wallet_vendedor and wallet_vendedor.saldo_congelado >= pedido.preco_total:
+                    wallet_vendedor.saldo_congelado -= pedido.preco_total
 
-    return {"mensagem": "Pedido cancelado com sucesso.", "status": pedido.status}
+        pedido.status = "cancelado"
+        db.commit()
 
+        return {
+            "mensagem": "Pedido cancelado com sucesso e saldo liberado.",
+            "status": pedido.status
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao cancelar pedido: {str(e)}")
 
 def aceitar_pedido(db: Session, pedido_id: int, vendedor_id: int):
     pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
@@ -331,35 +343,93 @@ def liberar_saldo_vendedor(db: Session, pedido: Pedido):
 
 
 
+def registrar_transacoes_conclusao(db: Session, pedido: Pedido, wallet_comprador: Wallet, wallet_vendedor: Wallet):
+    """
+    Registra as transações de conclusão do pedido.
+    """
+    # Busca informações dos usuários
+    comprador = db.query(Usuario).filter(Usuario.id == wallet_comprador.usuario_id).first()
+    vendedor = db.query(Usuario).filter(Usuario.id == wallet_vendedor.usuario_id).first()
+    produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+
+    # Registra transação do comprador (saída)
+    transacao_comprador = Transacao(
+        usuario_id=wallet_comprador.usuario_id,
+        msisdn=comprador.username if comprador else None,
+        valor=Decimal(-pedido.preco_total),
+        referencia=f"Compra do produto {produto.nome if produto else 'desconhecido'}",
+        status="sucesso",
+        tipo="saida"
+    )
+    db.add(transacao_comprador)
+
+    # Registra transação do vendedor (entrada)
+    transacao_vendedor = Transacao(
+        usuario_id=wallet_vendedor.usuario_id,
+        msisdn=vendedor.username if vendedor else None,
+        valor=pedido.preco_total,
+        referencia=f"Venda do produto {produto.nome if produto else 'desconhecido'}",
+        status="sucesso",
+        tipo="entrada"
+    )
+    db.add(transacao_vendedor)
+
+
+
 def confirmar_pagamento_vendedor(db: Session, pedido_id: int, vendedor_id: int):
-    pedido = db.query(Pedido).join(Produto).filter(Pedido.id == pedido_id, Produto.CustomerID == vendedor_id).first()
+    """
+    Confirma o pagamento e finaliza o pedido, liberando os saldos apropriadamente.
+    """
+    pedido = db.query(Pedido).join(Produto).filter(
+        Pedido.id == pedido_id, 
+        Produto.CustomerID == vendedor_id
+    ).first()
+    
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
 
     if not pedido.recebido_pelo_cliente:
         raise HTTPException(status_code=400, detail="O cliente ainda não confirmou o recebimento.")
 
-    pedido.aceito_pelo_vendedor = True
-    pedido.status = "Pagamento Recebido"
-    db.commit()
+    try:
+        pedido.aceito_pelo_vendedor = True
+        
+        # Se ambas as confirmações foram feitas, finaliza o pedido
+        if pedido.recebido_pelo_cliente and pedido.aceito_pelo_vendedor:
+            pedido.status = "concluido"
+            
+            # Atualiza o estoque
+            produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+            if produto:
+                produto.quantidade_estoque -= pedido.quantidade
+                if produto.quantidade_estoque <= 0:
+                    produto.ativo = False
 
-    # Se o pagamento e o recebimento forem confirmados, o pedido é finalizado
-    if pedido.recebido_pelo_cliente and pedido.aceito_pelo_vendedor:
-        pedido.status = "Concluído"
+            if pedido.tipo == "skywallet":
+                # Libera o saldo congelado e realiza a transferência
+                wallet_vendedor = db.query(Wallet).filter(Wallet.usuario_id == vendedor_id).first()
+                wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == pedido.customer_id).first()
+
+                if wallet_vendedor and wallet_comprador:
+                    # Remove o valor do saldo congelado de ambos
+                    if wallet_vendedor.saldo_congelado >= pedido.preco_total:
+                        wallet_vendedor.saldo_congelado -= pedido.preco_total
+                        wallet_vendedor.saldo_principal += pedido.preco_total
+                    
+                    if wallet_comprador.saldo_congelado >= pedido.preco_total:
+                        wallet_comprador.saldo_congelado -= pedido.preco_total
+
+                    # Registra as transações
+                    registrar_transacoes_conclusao(db, pedido, wallet_comprador, wallet_vendedor)
+        else:
+            pedido.status = "Pagamento Recebido"
+
         db.commit()
-
-        # Atualiza o estoque do produto
-        produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
-        if produto:
-            produto.quantidade_estoque -= pedido.quantidade  # Atualiza a quantidade em estoque
-            if produto.quantidade_estoque <= 0:
-                produto.ativo = False  # Desativa o produto se o estoque acabar
-            db.commit()
-
-        # Libera o saldo do vendedor
-        liberar_saldo_vendedor(db, pedido)
-
-    return {"mensagem": "Pagamento confirmado e pedido concluído."}
+        return {"mensagem": "Pagamento confirmado e pedido processado com sucesso."}
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao processar pagamento: {str(e)}")
 
 
 
@@ -418,3 +488,4 @@ def verificar_integridade_saldo(db: Session, user_id: int):
         raise Exception(f"Discrepância detectada para o usuário {user_id}: saldo atual {saldo_atual}, saldo esperado {saldo_calculado}")
     
     return {"msg": "Nenhuma discrepância detectada", "saldo_atual": saldo_atual, "saldo_calculado": saldo_calculado}
+#'quando tento cancelar o pedido,os ou recusar o pedido os saldos nao reflete como deve ser, e quando o proceso de pedido e concluido para os ambos o saldo congelado nao sai permanece'

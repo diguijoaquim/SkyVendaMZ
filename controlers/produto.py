@@ -655,7 +655,19 @@ def get_produtos_by_user(db: Session, user_id: int):
 
 
 
+def desativar_anuncios_expirados(db: Session):
+    """
+    Função para desativar anúncios que já expiraram.
+    """
+    anuncios_expirados = db.query(Anuncio).filter(
+        Anuncio.expira_em <= datetime.utcnow(),
+        Anuncio.ativo == True
+    ).all()
 
+    for anuncio in anuncios_expirados:
+        anuncio.ativo = False
+
+    db.commit()
 
 
 def promover_produto(
@@ -723,6 +735,7 @@ def promover_produto(
         "custo_promocao": float(custo_promocao),
         "saldo_atual": float(wallet.saldo_principal),
     }
+
 def get_produto(db: Session, slug: str):
     """
     Recupera um produto pelo slug e incrementa o número de visualizações.

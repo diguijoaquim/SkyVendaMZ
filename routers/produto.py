@@ -52,11 +52,13 @@ def promover_produto_route(
     dados: PromoverProdutoSchema,  # Recebendo o schema Pydantic
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user)  # Verifica o usuário autenticado
+    
 ):
     # Verifica o ID do usuário autenticado
     usuario_id = current_user.id
-
+    desativar_anuncios_expirados(db)
     # Chama a função de promover produto, desempacotando os dados do schema
+    
     return promover_produto(
         produto_id=dados.produto_id,
         dias=dados.dias,
@@ -64,7 +66,8 @@ def promover_produto_route(
         usuario_id=usuario_id,
         titulo=dados.titulo,
         descricao=dados.descricao,
-        tipo=dados.tipo
+        tipo=dados.tipo,
+       
     )
 
 
@@ -73,15 +76,22 @@ def promover_produto_route(
 def listar_anuncios_aleatorios(
     tipo_anuncio: str = Query(None, description="Tipo do anúncio para filtrar (opcional)"),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
+    
 ):
     """
     Rota para listar anúncios de forma aleatória, com dados do produto associado.
+    Agora desativa anúncios expirados em segundo plano.
     """
+    # Executa a tarefa de desativar anúncios expirados em segundo plano
+    desativar_anuncios_expirados(db)
+   
+
     # Construção da consulta
     stmt = (
         select(Anuncio, Produto)
         .join(Produto, Anuncio.produto_id == Produto.id)
+        .where(Anuncio.ativo == True)  # Filtrar apenas anúncios ativos
         .order_by(func.random())  # Ordenação aleatória
     )
     
@@ -108,6 +118,7 @@ def listar_anuncios_aleatorios(
                 "tipo_anuncio": anuncio.tipo_anuncio,
                 "produto_id": anuncio.produto_id,
                 "expira_em": anuncio.expira_em.isoformat() if anuncio.expira_em else None,
+                "dias_restantes": (anuncio.expira_em - datetime.utcnow()).days if anuncio.expira_em else None,
                 "promovido_em": anuncio.promovido_em.isoformat() if anuncio.promovido_em else None,
             },
             "produto": {
@@ -125,6 +136,7 @@ def listar_anuncios_aleatorios(
     ]
 
     return anuncios
+
 @router.post("/{produto_id}/reativar/")
 def reativar_produto_endpoint(produto_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     return reativar_produto(produto_id=produto_id, current_user=current_user, db=db) 
