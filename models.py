@@ -395,20 +395,23 @@ class Pedido(Base):
     produto_id = Column(Integer, ForeignKey("produto.id"))
     quantidade = Column(Integer, nullable=False)
     preco_total = Column(DECIMAL)
-    status_visivel_comprador = Column(Boolean, default=False)  # Status visível para o comprador
+    status_visivel_comprador = Column(Boolean, default=False)
     status_visivel_vendedor = Column(Boolean, default=False)
     data_pedido = Column(DateTime, default=datetime.utcnow)
-    status = Column(String(350))  # Estado do pedido: "Pendente", "Aceito", "Enviado", "Entregue", "Cancelado"
+    status = Column(String(350))
     aceito_pelo_vendedor = Column(Boolean, default=False)
-    tipo=Column(String(20),nullable=True)
+    tipo = Column(String(20), nullable=True)
     recebido_pelo_cliente = Column(Boolean, default=False)
-    data_aceite = Column(DateTime)  # Para rastrear quando o pedido foi aceito
-    data_envio = Column(DateTime)   # Para rastrear quando o produto foi enviado
-    data_entrega = Column(DateTime)  # Para rastrear quando o produto foi marcado como entregue
-     # Relacionamentos
-    produto = relationship("Produto", back_populates="pedidos")  # Relacionamento com Produto
-    customer = relationship("Usuario", back_populates="pedidos")  # Relacionamento com Usuario
-
+    data_aceite = Column(DateTime)
+    data_envio = Column(DateTime)
+    data_entrega = Column(DateTime)
+    # Novos campos
+    data_confirmacao_recebimento = Column(DateTime, nullable=True)
+    data_limite_confirmacao = Column(DateTime, nullable=True)
+    
+    # Relacionamentos
+    produto = relationship("Produto", back_populates="pedidos")
+    customer = relationship("Usuario", back_populates="pedidos")
 
 class Wallet(Base):
     __tablename__ = "wallet"

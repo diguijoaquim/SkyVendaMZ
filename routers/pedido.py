@@ -18,9 +18,76 @@ def verificar_saldo(user_id: int, db: Session = Depends(get_db)):
 def aceitar_pedido_route(pedido_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     return aceitar_pedido(db, pedido_id, current_user.id)
 
-@router.post("/{pedido_id}/confirmar-recebimento/")
-def confirmar_recebimento_route(pedido_id: int, cliente_id: int, db: Session = Depends(get_db)):
-    return confirmar_recebimento_cliente(db, pedido_id, cliente_id)
+
+
+
+@router.put("/{pedido_id}/confirmar-recebimento")
+def confirmar_recebimento(
+    pedido_id: int,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Confirma o recebimento do pedido pelo cliente e libera os saldos.
+    """
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+        
+    if pedido.customer_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Você não tem permissão para confirmar o recebimento deste pedido."
+        )
+        
+    if pedido.status != "aguardando_confirmacao":
+        raise HTTPException(
+            status_code=400,
+            detail="Este pedido não está aguardando confirmação de recebimento."
+        )
+        
+    try:
+        # Buscar as carteiras do vendedor e comprador
+        wallet_vendedor = db.query(Wallet).filter(
+            Wallet.usuario_id == pedido.produto.CustomerID
+        ).first()
+        
+        wallet_comprador = db.query(Wallet).filter(
+            Wallet.usuario_id == pedido.customer_id
+        ).first()
+        
+        if pedido.tipo == "skywallet":
+            # Liberar saldo congelado para o vendedor
+            if wallet_vendedor and wallet_vendedor.saldo_congelado >= pedido.preco_total:
+                wallet_vendedor.saldo_congelado -= pedido.preco_total
+                wallet_vendedor.saldo_principal += pedido.preco_total
+                
+            # Remover saldo congelado do comprador
+            if wallet_comprador and wallet_comprador.saldo_congelado >= pedido.preco_total:
+                wallet_comprador.saldo_congelado -= pedido.preco_total
+        
+        pedido.status = "concluido"
+        pedido.data_confirmacao_recebimento = datetime.utcnow()
+        
+        db.commit()
+        
+        return {
+            "id": pedido.id,
+            "status": pedido.status,
+            "data_confirmacao": pedido.data_confirmacao_recebimento,
+            "mensagem": "Recebimento confirmado e saldos liberados com sucesso."
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao confirmar recebimento: {str(e)}"
+        )
+
+
+
 
 @router.post("/{pedido_id}/confirmar-pagamento/")
 def confirmar_pagamento_route(pedido_id: int, CustomerID: int, db: Session = Depends(get_db)):
@@ -42,42 +109,65 @@ def cancelar_pedido_route(
     except HTTPException as e:
         raise e
 
-
-@router.put("/pedidos/{pedido_id}/recusar")
+@router.put("/{pedido_id}/recusar")  # Corrigido o caminho da rota
 def recusar_pedido_pelo_vendedor(
     pedido_id: int,
     db: Session = Depends(get_db),
-    current_user:Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(get_current_user),
 ):
-
     """
     Recusa um pedido e libera os saldos congelados.
     """
-    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
-    if not pedido:
-        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
-
-    produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
-    if not produto or produto.CustomerID != current_user.id:
-        raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este pedido.")
-
-    if pedido.status != "pendente":
-        raise HTTPException(status_code=400, detail="Apenas pedidos pendentes podem ser recusados.")
-
     try:
-        if pedido.tipo == "skywallet":
+        pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+        if not pedido:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+
+        produto = db.query(Produto).filter(Produto.id == pedido.produto_id).first()
+        if not produto or produto.CustomerID != current_user.id:
+            raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este pedido.")
+
+        if pedido.status != "pendente":
+            raise HTTPException(status_code=400, detail="Apenas pedidos pendentes podem ser recusados.")
+
+        # Normaliza o tipo do pedido para minúsculas
+        tipo_pedido = pedido.tipo.lower() if pedido.tipo else None
+
+        if tipo_pedido == "skywallet":
             # Liberar saldo congelado do comprador
             wallet_comprador = db.query(Wallet).filter(Wallet.usuario_id == pedido.customer_id).first()
-            if wallet_comprador and wallet_comprador.saldo_congelado >= pedido.preco_total:
-                wallet_comprador.saldo_congelado -= pedido.preco_total
-                wallet_comprador.saldo_principal += pedido.preco_total
+            if not wallet_comprador:
+                raise HTTPException(status_code=404, detail="Carteira do comprador não encontrada.")
+            
+            if wallet_comprador.saldo_congelado < pedido.preco_total:
+                raise HTTPException(status_code=400, detail="Erro: Saldo congelado do comprador inconsistente.")
+            
+            # Devolve o saldo para o comprador
+            wallet_comprador.saldo_congelado -= pedido.preco_total
+            wallet_comprador.saldo_principal += pedido.preco_total
 
             # Liberar saldo congelado do vendedor
             wallet_vendedor = db.query(Wallet).filter(Wallet.usuario_id == produto.CustomerID).first()
-            if wallet_vendedor and wallet_vendedor.saldo_congelado >= pedido.preco_total:
-                wallet_vendedor.saldo_congelado -= pedido.preco_total
+            if not wallet_vendedor:
+                raise HTTPException(status_code=404, detail="Carteira do vendedor não encontrada.")
+            
+            if wallet_vendedor.saldo_congelado < pedido.preco_total:
+                raise HTTPException(status_code=400, detail="Erro: Saldo congelado do vendedor inconsistente.")
+            
+            # Remove o saldo congelado do vendedor
+            wallet_vendedor.saldo_congelado -= pedido.preco_total
+
+            logger.info(f"Saldo liberado: Pedido {pedido_id}, Comprador ID {pedido.customer_id}, Vendedor ID {produto.CustomerID}, Valor {pedido.preco_total}")
 
         pedido.status = "recusado"
+        
+        # Tenta enviar notificação para o comprador
+        try:
+            mensagem = f"Seu pedido #{pedido.id} foi recusado pelo vendedor."
+            enviar_notificacao(db, pedido.customer_id, mensagem)
+        except Exception as e:
+            logger.error(f"Erro ao enviar notificação: {str(e)}")
+
         db.commit()
 
         return {
@@ -85,11 +175,14 @@ def recusar_pedido_pelo_vendedor(
             "status": pedido.status,
             "mensagem": "Pedido recusado com sucesso pelo vendedor e saldo liberado."
         }
+        
+    except HTTPException as he:
+        db.rollback()
+        raise he
     except Exception as e:
         db.rollback()
+        logger.error(f"Erro ao recusar pedido {pedido_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erro ao recusar pedido: {str(e)}")
-
-
 
 
 @router.delete("/item_pedidos/{item_pedido_id}")
@@ -487,3 +580,72 @@ def confirmar_pedid(
     current_user: Usuario = Depends(get_current_user)
 ):
     return aceitar_pedido(pedido_id=pedido_id, db=db, vendedor_id=current_user.id)
+
+
+
+
+@router.put("/{pedido_id}/entrega")
+def confirmar_entrega(
+    pedido_id: int, 
+    current_user: Usuario = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    """
+    Confirma a entrega de um pedido pelo vendedor.
+    
+    Args:
+        pedido_id: ID do pedido a ser confirmado
+        current_user: Usuário autenticado (vendedor)
+        db: Sessão do banco de dados
+    
+    Returns:
+        dict: Detalhes do pedido atualizado
+    """
+    # Buscar o pedido com join em Produto para ter acesso ao CustomerID
+    pedido = (
+        db.query(Pedido)
+        .join(Produto, Pedido.produto_id == Produto.id)
+        .filter(Pedido.id == pedido_id)
+        .first()
+    )
+
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+
+    # Verificar se o usuário autenticado é o vendedor do produto
+    if pedido.produto.CustomerID != current_user.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Você não tem permissão para confirmar a entrega deste pedido."
+        )
+
+    # Verificar se o pedido está em um status válido para confirmação
+    if pedido.status not in ["aceito", "pendente"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Não é possível confirmar a entrega de um pedido com status '{pedido.status}'"
+        )
+
+    try:
+        # Atualizar o status do pedido e registrar a confirmação
+        pedido.status = "aguardando_confirmacao"
+        pedido.data_entrega = datetime.utcnow()
+        pedido.data_entrega = datetime.utcnow()
+
+        db.commit()
+        db.refresh(pedido)
+
+        return {
+            "id": pedido.id,
+            "status": pedido.status,
+            "data_entrega": pedido.data_entrega,
+            "data_confirmacao": pedido.data_confirmacao_entrega,
+            "mensagem": "Entrega confirmada com sucesso"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao confirmar entrega: {str(e)}"
+        )

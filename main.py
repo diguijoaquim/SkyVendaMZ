@@ -17,13 +17,18 @@ from routers.pedido import router as pedido_router
 from routers.produto import router as produto_router
 from routers.usuario import router as usuario_router
 from routers.pesquisa import router as pesquisa_router
+from fastapi_utils.tasks import repeat_every
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from controlers.scheduler import init_scheduler
 
 import logging
 
 app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
+
+init_scheduler(app)
+
 
 app.add_middleware(
     CORSMiddleware,
