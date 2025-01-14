@@ -254,12 +254,12 @@ def aceitar_pedido(db: Session, pedido_id: int, vendedor_id: int):
     # Verifica o tipo do pedido
     if pedido.tipo == "normal":
         # Se for um pedido normal, marca como "Concluído" diretamente
-        pedido.status = "Concluido"
+        pedido.status = "concluido"
         pedido.data_aceite = datetime.utcnow()
     else:
         # Se não for "normal", atualiza o estado para "Aceito pelo Vendedor"
         pedido.aceito_pelo_vendedor = True
-        pedido.status = "Aceito pelo Vendedor"
+        pedido.status = "aceite"
         pedido.data_aceite = datetime.utcnow()
 
     db.commit()
@@ -275,7 +275,7 @@ def confirmar_recebimento_cliente(db: Session, pedido_id: int, cliente_id: int):
 
     # Atualiza o estado para "Recebido pelo Cliente"
     pedido.recebido_pelo_cliente = True
-    pedido.status = "Recebido pelo Cliente"
+    pedido.status = "recebido"
     db.commit()
 
     return {"mensagem": "Recebimento confirmado pelo cliente."}
@@ -422,7 +422,7 @@ def confirmar_pagamento_vendedor(db: Session, pedido_id: int, vendedor_id: int):
                     # Registra as transações
                     registrar_transacoes_conclusao(db, pedido, wallet_comprador, wallet_vendedor)
         else:
-            pedido.status = "Pagamento Recebido"
+            pedido.status = "concluido"
 
         db.commit()
         return {"mensagem": "Pagamento confirmado e pedido processado com sucesso."}
@@ -430,10 +430,6 @@ def confirmar_pagamento_vendedor(db: Session, pedido_id: int, vendedor_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao processar pagamento: {str(e)}")
-
-
-
-
 
 def obter_saldo_do_usuario(db: Session, user_id: int) -> Decimal:
     # Obter saldo atual do usuário na tabela 'wallet'

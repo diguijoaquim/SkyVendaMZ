@@ -259,16 +259,92 @@ def pesquisa_avancada(
     return produtos
 
 
+
 @router.get("/{slug}")
-def read_produto(slug: str, db: Session = Depends(get_db)):
-    # Busca o produto pelo slug no banco de dados
-    db_produto = db.query(Produto).filter(Produto.slug == slug).first()
+def obter_produto(
+    slug: str,
+    db: Session = Depends(get_db),
+    user_id: int = Query(None, description="ID opcional do usuário para verificar likes"),
+):
+    """
+    Retorna os detalhes de um produto específico baseado no `slug` e aumenta as visualizações.
+    Se `user_id` for fornecido, indica se o usuário deu like no produto.
+
+    Args:
+        slug (str): Slug do produto para buscar o produto.
+        user_id (int): ID opcional do usuário para verificar os likes.
+
+    Returns:
+        dict: Detalhes do produto.
+    """
+    # Buscar o produto pelo slug
+    produto = db.query(Produto).filter(Produto.slug == slug).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
     
-    # Verifica se o produto foi encontrado
-    if db_produto is None:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
-    
-    return db_produto
+
+    # Verificar se o usuário deu like
+    usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
+
+    # Função auxiliar para calcular a média de estrelas do vendedor
+    def calcular_media_estrelas(usuario_id: int):
+        avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+        if not avaliacoes:
+            return None  # Sem avaliações
+        soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
+        return round(soma_estrelas / len(avaliacoes), 2)
+
+    # Retorna os detalhes do produto
+    return {
+            "id": produto.id,
+            "title": produto.nome,
+            "thumb": produto.capa,
+            "images": produto.fotos,
+            "price": float(produto.preco),
+            "stock_quantity": produto.quantidade_estoque,
+            "state": produto.estado,
+            "province": produto.provincia,
+            "district": produto.distrito,
+            "location": produto.localizacao,
+            "review": produto.revisao,
+            "availability": produto.disponiblidade,
+            "description": produto.descricao,
+            "category": produto.categoria,
+            "details": produto.detalhes,
+            "type": produto.tipo,
+            "views": produto.visualizacoes,
+            "active": produto.ativo,
+            "customer_id": produto.CustomerID,
+            "likes": produto.likes,
+            "slug": produto.slug,
+            "time": calcular_tempo_publicacao(produto.data_publicacao),
+            "user": {
+                "id": produto.usuario.id,
+                "name": produto.usuario.nome,
+                "avatar": produto.usuario.foto_perfil,
+                "average_stars": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
+            },
+        "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
+        "comments": [
+                {
+                    "id": comentario.id,
+                    "text": comentario.comentario,
+                    "date": calcular_tempo_publicacao(comentario.data_comentario),
+                    "user": {
+                        "id": comentador.id,
+                        "name": comentador.nome,
+                        "avatar": comentador.foto_perfil
+                    }
+                }
+                for comentario, comentador in (
+                    db.query(Comentario, Usuario)
+                    .join(Usuario, Usuario.id == Comentario.usuarioID)
+                    .filter(Comentario.produtoID == produto.id)
+                    .all()
+                )
+            ]
+    }
+
 
 
 

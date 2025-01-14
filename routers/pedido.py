@@ -61,7 +61,7 @@ def recusar_pedido_pelo_vendedor(
     if not produto or produto.CustomerID != current_user.id:
         raise HTTPException(status_code=403, detail="Você não tem permissão para recusar este pedido.")
 
-    if pedido.status != "Pendente":
+    if pedido.status != "pendente":
         raise HTTPException(status_code=400, detail="Apenas pedidos pendentes podem ser recusados.")
 
     try:
