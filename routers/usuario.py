@@ -278,10 +278,10 @@ async def _create_user_wallet(db: Session, usuario: Usuario):
 async def _prepare_success_response(usuario: Usuario):
     """Prepara resposta de sucesso"""
     try:
-        # Ajustando para usar o formato correto do create_access_token
+        # Adicionando o parâmetro user_role
         access_token = create_access_token(
-            user_id=usuario.id,  # Usando user_id em vez de subject
-            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            user_id=usuario.id,
+            user_role=usuario.tipo  # Usando o tipo do usuário como role
         )
         
         user_data = {
