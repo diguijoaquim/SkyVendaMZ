@@ -31,9 +31,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 #mpesa
 url = "https://api.sandbox.vm.co.mz:18352/ipg/v1x/c2bPayment/singleStage/"
 #google
-GOOGLE_CLIENT_ID ="447649377867-1ff1uie6eeds2u3cq5er9virar9vden5.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "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"
-GOOGLE_REDIRECT_URI = "https://skyvendamz.up.railway.app/auth/callback"
+GOOGLE_CLIENT_ID ="176605076915-cvolrc3k1hjlkedlu7b9c19hi8ft7tuc.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET = "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"
+GOOGLE_REDIRECT_URI = "https://skyvendamz.up.railway.app/usuario/auth/callback"
+
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URI = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -128,61 +129,103 @@ def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get
         # Exibir o conteúdo bruto da resposta para depuração
         print(f"Resposta da M-Pesa: {response.text}")
         raise HTTPException(status_code=400, detail=f"Erro ao processar a transação: {response.text}")
-
 @router.get("/auth/callback")
-async def google_auth_callback(code: str, db: Session = Depends(get_db)):
-    # Troca o código de autorização por um token de acesso
-    data = {
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "grant_type": "authorization_code",
-    }
+async def google_auth_callback(
+    code: str, 
+    db: Session = Depends(get_db),
+    error: Optional[str] = None
+):
+    """
+    Callback do Google OAuth2
+    """
+    if error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Erro na autenticação Google: {error}"
+        )
 
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(GOOGLE_TOKEN_URI, data=data)
-        token_json = token_response.json()
+    try:
+        # Dados para trocar o código por token
+        data = {
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "grant_type": "authorization_code",
+        }
 
-        if "access_token" not in token_json:
-            raise HTTPException(status_code=400, detail="Erro ao obter token de acesso")
-
-        access_token = token_json["access_token"]
-
-        # Obter as informações do usuário autenticado
-        userinfo_response = await client.get(GOOGLE_USERINFO_URI, headers={"Authorization": f"Bearer {access_token}"})
-        userinfo = userinfo_response.json()
-
-        google_id = userinfo.get("sub")
-        email = userinfo.get("email")
-        nome_completo = userinfo.get("name")
-        primeiro_nome = userinfo.get("given_name")
-        sobrenome = userinfo.get("family_name")
-        foto_perfil = userinfo.get("picture")  # Foto do perfil
-
-        # Verifica se o usuário já existe no banco de dados pelo google_id ou email
-        user = db.query(Usuario).filter((Usuario.google_id == google_id) | (Usuario.email == email)).first()
-
-        if not user:
-            # Se o usuário não existir, cria um novo
-            new_user = Usuario(
-                email=email,
-                nome=nome_completo,
-                google_id=google_id,
-                username=sobrenome,  # Sobrenome como username
-                senha=None,  # Não salvamos senha para usuários do Google
-                foto_perfil=foto_perfil  # Armazena a foto do perfil
+        async with httpx.AsyncClient() as client:
+            # Obter token de acesso
+            token_response = await client.post(
+                GOOGLE_TOKEN_URI, 
+                data=data,
+                headers={"Accept": "application/json"}
             )
-            db.add(new_user)
-            db.commit()
-            db.refresh(new_user)
-            user = new_user
+            
+            if token_response.status_code != 200:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Erro ao obter token do Google"
+                )
 
-        # Cria o token JWT para o usuário existente ou recém-criado
-        access_token = create_access_token(data={"sub": str(user.id)})
+            token_data = token_response.json()
+            access_token = token_data.get("access_token")
 
-        # Redireciona para a página de produtos
-        redirect_url = "https://skyvenda-mz.vercel.app"
+            if not access_token:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Token de acesso não encontrado"
+                )
+
+            # Obter informações do usuário
+            userinfo_response = await client.get(
+                GOOGLE_USERINFO_URI,
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if userinfo_response.status_code != 200:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Erro ao obter informações do usuário"
+                )
+
+            userinfo = userinfo_response.json()
+
+            # Buscar ou criar usuário
+            usuario = db.query(Usuario).filter(
+                Usuario.email == userinfo["email"]
+            ).first()
+
+            if not usuario:
+                # Gerar identificador único
+                identificador_unico = gerar_identificador_unico(db)
+                
+                # Criar novo usuário
+                usuario = Usuario(
+                    email=userinfo["email"],
+                    nome=userinfo["name"],
+                    username=userinfo["email"].split("@")[0],
+                    google_id=userinfo["sub"],
+                    foto_perfil=userinfo.get("picture"),
+                    identificador_unico=identificador_unico,
+                    ativo=True
+                )
+                db.add(usuario)
+                db.commit()
+                db.refresh(usuario)
+
+            # Gerar token JWT
+            access_token = create_access_token(data={"sub": str(usuario.id)})
+
+            # Redirecionar para o frontend com o token
+            redirect_url = f"https://skyvenda-mz.vercel.app/auth/success?token={access_token}"
+            return RedirectResponse(url=redirect_url)
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno: {str(e)}"
+        )
         return RedirectResponse(url=redirect_url)
         # URL da sua aplicação frontend
 

@@ -15,7 +15,7 @@ aiofiles
 bcrypt
 pymysql
 apscheduler
- typing-inspect
+typing-inspect
 fastapi-utils
 mysql-connector-python
 psycopg2

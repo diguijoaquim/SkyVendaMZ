@@ -260,6 +260,93 @@ def pesquisa_avancada(
 
 
 
+@router.get("/{pedido_id}/details", response_model=dict)
+def get_order_details(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Get detailed information for a specific order.
+    Returns data with English keys.
+    """
+    try:
+        # Busca o pedido e faz join com produto
+        order = (
+            db.query(Pedido)
+            .filter(
+                Pedido.id == pedido_id,
+                Pedido.status != "Eliminado"
+            )
+            .first()
+        )
+
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+
+        # Verifica se o usuário tem permissão (comprador ou vendedor)
+        product = db.query(Produto).filter(Produto.id == order.produto_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        if order.customer_id != current_user.id and product.CustomerID != current_user.id:
+            raise HTTPException(
+                status_code=403, 
+                detail="You don't have permission to view this order"
+            )
+
+        # Busca dados do comprador e vendedor
+        buyer = db.query(Usuario).filter(Usuario.id == order.customer_id).first()
+        seller = db.query(Usuario).filter(Usuario.id == product.CustomerID).first()
+
+        # Monta o dicionário de resposta
+        order_details = {
+            "order": {
+                "id": order.id,
+                "status": order.status,
+                "type": order.tipo,
+                "quantity": order.quantidade,
+                "total_price": float(order.preco_total) if order.preco_total else None,
+                "order_date": order.data_pedido.isoformat() if order.data_pedido else None,
+                "acceptance_date": order.data_aceite.isoformat() if order.data_aceite else None,
+                "shipping_date": order.data_envio.isoformat() if order.data_envio else None,
+                "delivery_date": order.data_entrega.isoformat() if order.data_entrega else None,
+                "confirmation_date": order.data_confirmacao_recebimento.isoformat() 
+                    if hasattr(order, 'data_confirmacao_recebimento') and order.data_confirmacao_recebimento 
+                    else None,
+                "accepted_by_seller": order.aceito_pelo_vendedor,
+                "received_by_buyer": order.recebido_pelo_cliente
+            },
+            "product": {
+                "id": product.id,
+                "name": product.nome,
+                "price": float(product.preco) if product.preco else None,
+                "cover_image": product.capa,
+                "description": product.descricao,
+                "category": product.categoria
+            },
+            "buyer": {
+                "id": buyer.id if buyer else None,
+                "name": buyer.nome if buyer else None,
+                "email": buyer.email if buyer else None,
+                "phone": buyer.telefone if buyer else None
+            },
+            "seller": {
+                "id": seller.id if seller else None,
+                "name": seller.nome if seller else None,
+                "email": seller.email if seller else None,
+                "phone": seller.telefone if seller else None
+            }
+        }
+
+        return order_details
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error getting order details for order {pedido_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @router.get("/{slug}")
 def obter_produto(
     slug: str,
@@ -274,8 +361,8 @@ def obter_produto(
         slug (str): Slug do produto para buscar o produto.
         user_id (int): ID opcional do usuário para verificar os likes.
 
-    Returns:
-        dict: Detalhes do produto.
+    Returns:                                                                                    
+        dict: Detalhes do  produto.
     """
     # Buscar o produto pelo slug
     produto = db.query(Produto).filter(Produto.slug == slug).first()
