@@ -20,7 +20,16 @@ import httpx
 import json
 from decimal import Decimal
 from controlers.utils import gerar_identificador_unico
+import logging
 
+# Configuração do logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# URLs do frontend
+FRONTEND_URL = "https://skyvenda-mz.vercel.app"
+SUCCESS_URL = f"{FRONTEND_URL}/auth/success"
+ERROR_URL = f"{FRONTEND_URL}/auth/error"
 
 router = APIRouter(prefix="/usuario", tags=["rotas de usuarios"])
 
@@ -138,160 +147,164 @@ async def google_auth_callback(
     error: Optional[str] = None
 ):
     """
-    Callback do Google OAuth2
+    Processa o callback do Google OAuth2 e cria/atualiza usuário
     """
+    if error:
+        logger.error(f"Erro na autenticação Google: {error}")
+        return _redirect_error(f"Erro na autenticação Google: {error}")
+
     try:
-        print("Iniciando callback do Google OAuth2")  # Log inicial
+        # Obter token e informações do usuário Google
+        google_user = await _get_google_user_info(code)
         
-        if error:
-            print(f"Erro recebido do Google: {error}")  # Log do erro do Google
-            raise HTTPException(
-                status_code=400,
-                detail=f"Erro na autenticação Google: {error}"
-            )
-
-        # Dados para trocar o código por token
-        data = {
-            "code": code,
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
-            "redirect_uri": GOOGLE_REDIRECT_URI,
-            "grant_type": "authorization_code",
-        }
-
-        print("Obtendo token do Google...")  # Log
-        async with httpx.AsyncClient(verify=False) as client:  # Desabilitando verificação SSL temporariamente
-            # Obter token de acesso do Google
-            token_response = await client.post(
-                GOOGLE_TOKEN_URI, 
-                data=data,
-                headers={"Accept": "application/json"}
-            )
-            
-            print(f"Resposta do Google Token: {token_response.status_code}")  # Log
-            print(f"Conteúdo da resposta: {token_response.text}")  # Log do conteúdo
-            
-            if token_response.status_code != 200:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Erro ao obter token do Google: {token_response.text}"
-                )
-
-            token_data = token_response.json()
-            google_access_token = token_data.get("access_token")
-
-            if not google_access_token:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Token de acesso do Google não encontrado na resposta"
-                )
-
-            print("Obtendo informações do usuário...")  # Log
-            # Obter informações do usuário
-            userinfo_response = await client.get(
-                GOOGLE_USERINFO_URI,
-                headers={"Authorization": f"Bearer {google_access_token}"}
-            )
-            
-            print(f"Resposta do Google Userinfo: {userinfo_response.status_code}")  # Log
-            
-            if userinfo_response.status_code != 200:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Erro ao obter informações do usuário: {userinfo_response.text}"
-                )
-
-            userinfo = userinfo_response.json()
-            print(f"Informações do usuário obtidas: {userinfo}")  # Log
-
-            try:
-                # Buscar ou criar usuário
-                usuario = db.query(Usuario).filter(
-                    Usuario.email == userinfo["email"]
-                ).first()
-
-                if not usuario:
-                    print("Criando novo usuário...")  # Log
-                    # Gerar identificador único
-                    identificador_unico = gerar_identificador_unico(db)
-                    
-                    # Criar novo usuário
-                    usuario = Usuario(
-                        email=userinfo["email"],
-                        nome=userinfo["name"],
-                        username=userinfo["email"].split("@")[0],
-                        google_id=userinfo["sub"],
-                        foto_perfil=userinfo.get("picture"),
-                        identificador_unico=identificador_unico,
-                        ativo=True,
-                        tipo="cliente",
-                        limite_diario_publicacoes=5,
-                        data_cadastro=datetime.utcnow(),
-                        revisao="nao"
-                    )
-                    db.add(usuario)
-                    db.commit()
-                    db.refresh(usuario)
-
-                    print(f"Novo usuário criado com ID: {usuario.id}")  # Log
-
-                    # Criar wallet
-                    wallet = Wallet(
-                        usuario_id=usuario.id,
-                        saldo_principal=0,
-                        saldo_bonus=0,
-                        saldo_congelado=0
-                    )
-                    db.add(wallet)
-                    db.commit()
-                    print("Wallet criada com sucesso")  # Log
-
-                print("Gerando token JWT...")  # Log
-                # Gerar token JWT
-                access_token = create_access_token(subject=str(usuario.id))
-
-                # Preparar dados do usuário
-                user_data = {
-                    "id": usuario.id,
-                    "email": usuario.email,
-                    "nome": usuario.nome,
-                    "username": usuario.username,
-                    "foto_perfil": usuario.foto_perfil,
-                    "tipo": usuario.tipo,
-                    "conta_pro": usuario.conta_pro,
-                    "identificador_unico": usuario.identificador_unico
-                }
-
-                # Redirecionar para sucesso
-                params = {
-                    "token": access_token,
-                    "user": json.dumps(user_data)
-                }
-                success_url = f"https://skyvenda-mz.vercel.app/auth/success?{urlencode(params)}"
-                print(f"Redirecionando para: {success_url}")  # Log
-                
-                return RedirectResponse(
-                    url=success_url,
-                    status_code=302
-                )
-
-            except Exception as db_error:
-                print(f"Erro no banco de dados: {str(db_error)}")  # Log do erro
-                db.rollback()
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Erro ao processar usuário: {str(db_error)}"
-                )
+        # Processar usuário no banco de dados
+        usuario = await _process_user(db, google_user)
+        
+        # Gerar token e preparar resposta
+        return await _prepare_success_response(usuario)
 
     except HTTPException as he:
-        print(f"HTTPException: {str(he)}")  # Log do erro HTTP
-        error_url = f"https://skyvenda-mz.vercel.app/auth/error?error={urlencode({'message': he.detail})}"
-        return RedirectResponse(url=error_url, status_code=302)
-        
+        logger.error(f"Erro HTTP: {he.detail}")
+        return _redirect_error(he.detail)
     except Exception as e:
-        print(f"Erro não tratado: {str(e)}")  # Log do erro
-        error_url = f"https://skyvenda-mz.vercel.app/auth/error?error={urlencode({'message': 'Erro interno do servidor'})}"
-        return RedirectResponse(url=error_url, status_code=302)
+        logger.exception("Erro não esperado no callback do Google")
+        return _redirect_error("Erro interno do servidor")
+
+async def _get_google_user_info(code: str) -> dict:
+    """Obtém informações do usuário do Google"""
+    data = {
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
+
+    async with httpx.AsyncClient() as client:
+        # Obter token de acesso
+        token_response = await client.post(
+            GOOGLE_TOKEN_URI,
+            data=data,
+            headers={"Accept": "application/json"}
+        )
+        
+        if token_response.status_code != 200:
+            logger.error(f"Erro ao obter token Google: {token_response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Falha ao obter token do Google"
+            )
+
+        google_token = token_response.json().get("access_token")
+        if not google_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token não encontrado na resposta"
+            )
+
+        # Obter informações do usuário
+        userinfo = await client.get(
+            GOOGLE_USERINFO_URI,
+            headers={"Authorization": f"Bearer {google_token}"}
+        )
+        
+        if userinfo.status_code != 200:
+            logger.error(f"Erro ao obter dados do usuário: {userinfo.text}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Falha ao obter dados do usuário"
+            )
+
+        return userinfo.json()
+
+async def _process_user(db: Session, google_user: dict) -> Usuario:
+    """Processa o usuário no banco de dados"""
+    try:
+        usuario = db.query(Usuario).filter(
+            Usuario.email == google_user["email"]
+        ).first()
+
+        if not usuario:
+            usuario = await _create_new_user(db, google_user)
+            await _create_user_wallet(db, usuario)
+            
+        return usuario
+
+    except Exception as e:
+        logger.exception("Erro ao processar usuário")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao processar usuário"
+        )
+
+async def _create_new_user(db: Session, google_user: dict) -> Usuario:
+    """Cria novo usuário"""
+    identificador_unico = gerar_identificador_unico(db)
+    
+    usuario = Usuario(
+        email=google_user["email"],
+        nome=google_user["name"],
+        username=google_user["email"].split("@")[0],
+        google_id=google_user["sub"],
+        foto_perfil=google_user.get("picture"),
+        identificador_unico=identificador_unico,
+        ativo=True,
+        tipo="cliente",
+        limite_diario_publicacoes=5,
+        data_cadastro=datetime.utcnow(),
+        revisao="nao"
+    )
+    
+    db.add(usuario)
+    db.commit()
+    db.refresh(usuario)
+    logger.info(f"Novo usuário criado: {usuario.id}")
+    return usuario
+
+async def _create_user_wallet(db: Session, usuario: Usuario):
+    """Cria wallet para novo usuário"""
+    wallet = Wallet(
+        usuario_id=usuario.id,
+        saldo_principal=0,
+        saldo_bonus=0,
+        saldo_congelado=0
+    )
+    db.add(wallet)
+    db.commit()
+    logger.info(f"Wallet criada para usuário: {usuario.id}")
+
+async def _prepare_success_response(usuario: Usuario):
+    """Prepara resposta de sucesso"""
+    access_token = create_access_token(subject=str(usuario.id))
+    
+    user_data = {
+        "id": usuario.id,
+        "email": usuario.email,
+        "nome": usuario.nome,
+        "username": usuario.username,
+        "foto_perfil": usuario.foto_perfil,
+        "tipo": usuario.tipo,
+        "conta_pro": usuario.conta_pro,
+        "identificador_unico": usuario.identificador_unico
+    }
+
+    params = {
+        "token": access_token,
+        "user": json.dumps(user_data)
+    }
+    
+    return RedirectResponse(
+        url=f"{SUCCESS_URL}?{urlencode(params)}",
+        status_code=status.HTTP_302_FOUND
+    )
+
+def _redirect_error(message: str):
+    """Helper para redirecionamento de erro"""
+    return RedirectResponse(
+        url=f"{ERROR_URL}?error={urlencode({'message': message})}",
+        status_code=status.HTTP_302_FOUND
+    )
 
 @router.get("/perfil")
 def read_perfil(db: Session = Depends(get_db),current_user: Usuario = Depends(get_current_user)):

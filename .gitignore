@@ -2,13 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
-git config --global http.sslVerify false
+
 # C extensions
 *.so
 git config --local --add safe.directory '*'
 # Distribution / packaging
-git config --global --unset http.sslVerify
-git config --global --unset http.sslCAInfo
 .Python
 build/
 develop-eggs/
