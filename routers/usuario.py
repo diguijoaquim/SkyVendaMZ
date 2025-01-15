@@ -171,7 +171,7 @@ async def google_auth_callback(
                 )
 
             token_data = token_response.json()
-            access_token = token_data.get("access_token")
+            access_token = create_access_token(subject=str(usuario.id))
 
             if not access_token:
                 raise HTTPException(
@@ -228,7 +228,7 @@ async def google_auth_callback(
             status_code=500,
             detail=f"Erro interno: {str(e)}"
         )
-        return RedirectResponse(url=redirect_url)
+        
         # URL da sua aplicação frontend
 
 @router.get("/perfil")
