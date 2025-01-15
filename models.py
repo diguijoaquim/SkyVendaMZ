@@ -101,17 +101,17 @@ class Usuario(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(255), unique=True, index=True)
-    nome = Column(String(50))
+    nome = Column(String(250))
     identificador_unico = Column(String(255), unique=True, nullable=True, index=True)
     email = Column(String(255), unique=True, index=True)
     senha = Column(String(255), nullable=True)  # Pode ser null para login com Google
     google_id = Column(String(255), unique=True, nullable=True)
     tipo = Column(String(255), nullable=True,default="cliente")
-    contacto=Column(String(20),nullable=True)
+    contacto=Column(String(255),nullable=True)
     # saldo = Column(Float, default=0.0)  # Removido: o saldo agora está na tabela Wallet
-    foto_perfil = Column(String(50), nullable=True)
-    min_perfil = Column(String(50), nullable=True)
-    foto_capa = Column(String(50), nullable=True)
+    foto_perfil = Column(String(500), nullable=True)
+    min_perfil = Column(String(500), nullable=True)
+    foto_capa = Column(String(500), nullable=True)
     ativo = Column(Boolean, default=True)
     conta_pro = Column(Boolean, default=False)  # Indica se o usuário tem uma conta PRO
     limite_diario_publicacoes = Column(Integer, default=5)  # Limite de publicações diárias para usuários PRO

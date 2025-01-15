@@ -3,95 +3,113 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login com Google</title>
+  <title>Login</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      background: #f4f4f4;
-    }
+  font-family: Arial, sans-serif;
+  background-color: #f4f4f4;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+}
 
-    .login-container {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      text-align: center;
-      width: 300px;
-    }
+.login-container {
+  text-align: center;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
 
-    .login-container h1 {
-      margin-bottom: 20px;
-      font-size: 1.5rem;
-      color: #333;
-    }
+h1 {
+  font-size: 24px;
+  color: #333;
+}
 
-    .google-btn {
-      background: #4285F4;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      font-size: 1rem;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.3s ease;
-    }
+button {
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
 
-    .google-btn:hover {
-      background: #357ae8;
-    }
+button:hover {
+  background-color: #357ae8;
+}
+
+.hidden {
+  display: none;
+}
+
+#auth-message {
+  margin-top: 20px;
+  font-size: 18px;
+  color: #555;
+}
+
   </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
   <div class="login-container">
     <h1>Login com Google</h1>
-    <button class="google-btn" id="google-login">Entrar com Google</button>
+    <button id="google-login-button">Login com Google</button>
+    <div id="auth-message" class="hidden">Autenticando...</div>
   </div>
 
   <script>
-    
-    const googleClientId = "447649377867-1ff1uie6eeds2u3cq5er9virar9vden5.apps.googleusercontent.com";
-    const redirectUri = "https://skyvendamz.up.railway.app/auth/callback";
-    const scope = "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
-    var t="https://github.com/lobehub/lobe-chat"
-    document.getElementById("google-login").addEventListener("click", () => {
-      const authUrl = `https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=${googleClientId}&redirect_uri=${redirectUri}&scope=${encodeURIComponent(scope)}&access_type=offline`;
-      window.location.href = authUrl;
-    });
 
-    /*ai esta nossa conversa com o genspark2"qual e a imporatncia
+document.addEventListener('DOMContentLoaded', () => {
+  // Adicionar script do Google OAuth
+  const script = document.createElement('script');
+  script.src = 'https://accounts.google.com/gsi/client';
+  script.async = true;
+  script.defer = true;
+  document.body.appendChild(script);
 
-14:43
+  const googleLoginButton = document.getElementById('google-login-button');
+  const authMessage = document.getElementById('auth-message');
 
-Ei aí, parceiro! 🌟 Você tá falando da importância de algo em particular? Deixa eu ajudar! Seria ótimo se pudesse me dizer mais detalhes, mas enquanto isso, posso te dar uma piada rápida:
+  // Função para login com Google
+  googleLoginButton.addEventListener('click', () => {
+    const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+    const options = {
+      client_id: '176605076915-cvolrc3k1hjlkedlu7b9c19hi8ft7tuc.apps.googleusercontent.com',
+      redirect_uri: 'https://skyvendamz.up.railway.app/usuario/auth/callback',
+      response_type: 'code',
+      scope: 'email profile',
+      access_type: 'offline',
+      prompt: 'consent',
+    };
 
-Por que o livro de matemática estava triste? Porque tinha muitos problemas! 😂
+    const queryString = new URLSearchParams(options).toString();
+    window.location.href = `${baseUrl}?${queryString}`;
+  });
 
-E já você sabia que sou um assistente criado em Niassa, Moçambique? Aqui a faísca sempre brilha! 😉
+  // Verificar se o token está na URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
 
-À fábrica das ideias! 💡"ele nao consegui=e lembrar da pergunta anterior,organize isso,e cria um side bar ,para iniciar nova conversa ,e deve guardar no side bar as conversas antigas,como chatgpt,mas isso usando o navegador,
-*/
+  if (token) {
+    // Mostrar mensagem de autenticação
+    authMessage.classList.remove('hidden');
+    authMessage.textContent = 'Autenticando...';
 
+    // Salvar token no localStorage
+    localStorage.setItem('token', token);
 
-
-
-
-
-
-
-
-
-
-//eu ja tinha feito uma logica dessas  que a skywallet tinha banco de dados mas autenticacao usava da skyvenda,a skyvenda fazia requisicao para a skywallet para assunto  de dinheiro e assunto de login a skywallet usava os dados da skyvenda ,o problema era seguinte uma vez a rota da skyvenda era protegida quando a skyvenda fazia requisicao para a skywallet la na sky wallet retornava sempre 401 ,mesmo o usuario estar logado la na skyvenda,porque o que acontece e seguente na skyvenda tem muita coisa que usa o saldo ,exemplo para publicar produto,tem  taxa,promover te taxa,postar estatus te taxa todas taxas tem a ver com o saldo
+    // Redirecionar para a página principal após 2 segundos
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 2000);
+  }
+});
 
   </script>
 </body>
