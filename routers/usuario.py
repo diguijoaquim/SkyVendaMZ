@@ -277,7 +277,8 @@ async def _create_user_wallet(db: Session, usuario: Usuario):
 
 async def _prepare_success_response(usuario: Usuario):
     """Prepara resposta de sucesso"""
-    access_token = create_access_token(subject=str(usuario.id))
+    # Alterando de 'subject' para 'data'
+    access_token = create_access_token(data={"sub": str(usuario.id)})
     
     user_data = {
         "id": usuario.id,
@@ -299,7 +300,6 @@ async def _prepare_success_response(usuario: Usuario):
         url=f"{SUCCESS_URL}?{urlencode(params)}",
         status_code=status.HTTP_302_FOUND
     )
-
 def _redirect_error(message: str):
     """Helper para redirecionamento de erro"""
     return RedirectResponse(
