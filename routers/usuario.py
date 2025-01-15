@@ -277,29 +277,36 @@ async def _create_user_wallet(db: Session, usuario: Usuario):
 
 async def _prepare_success_response(usuario: Usuario):
     """Prepara resposta de sucesso"""
-    # Alterando de 'subject' para 'data'
-    access_token = create_access_token(data={"sub": str(usuario.id)})
-    
-    user_data = {
-        "id": usuario.id,
-        "email": usuario.email,
-        "nome": usuario.nome,
-        "username": usuario.username,
-        "foto_perfil": usuario.foto_perfil,
-        "tipo": usuario.tipo,
-        "conta_pro": usuario.conta_pro,
-        "identificador_unico": usuario.identificador_unico
-    }
+    try:
+        access_token = create_access_token(subject=str(usuario.id))
+        
+        user_data = {
+            "id": usuario.id,
+            "email": usuario.email,
+            "nome": usuario.nome,
+            "username": usuario.username,
+            "foto_perfil": usuario.foto_perfil,
+            "tipo": usuario.tipo,
+            "conta_pro": usuario.conta_pro,
+            "identificador_unico": usuario.identificador_unico
+        }
 
-    params = {
-        "token": access_token,
-        "user": json.dumps(user_data)
-    }
-    
-    return RedirectResponse(
-        url=f"{SUCCESS_URL}?{urlencode(params)}",
-        status_code=status.HTTP_302_FOUND
-    )
+        params = {
+            "token": access_token,
+            "user": json.dumps(user_data)
+        }
+        
+        return RedirectResponse(
+            url=f"{SUCCESS_URL}?{urlencode(params)}",
+            status_code=status.HTTP_302_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Erro ao preparar resposta de sucesso: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao gerar token de acesso"
+        )
+
 def _redirect_error(message: str):
     """Helper para redirecionamento de erro"""
     return RedirectResponse(

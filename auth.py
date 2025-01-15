@@ -41,7 +41,6 @@ def get_password_hash(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
-
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
     """
     Cria um novo token JWT
@@ -58,16 +57,13 @@ def create_access_token(subject: str, expires_delta: Optional[timedelta] = None)
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # Dados que serão codificados no token
     to_encode = {
-        "sub": subject,  # identificador do usuário
-        "exp": expire,   # data de expiração
-        "iat": datetime.utcnow()  # data de criação
+        "sub": subject,
+        "exp": expire,
+        "iat": datetime.utcnow()
     }
     
-    # Codifica o token
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    
     return encoded_jwt
 
 
