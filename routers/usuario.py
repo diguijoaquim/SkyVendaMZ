@@ -129,6 +129,8 @@ def adicionar_saldo_via_mpesa(msisdn: str, valor: int, db: Session = Depends(get
         # Exibir o conteúdo bruto da resposta para depuração
         print(f"Resposta da M-Pesa: {response.text}")
         raise HTTPException(status_code=400, detail=f"Erro ao processar a transação: {response.text}")
+    
+    
 @router.get("/auth/callback")
 async def google_auth_callback(
     code: str, 
