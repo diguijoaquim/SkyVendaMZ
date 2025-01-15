@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from models import Usuario, Transacao, Publicacao, Notificacao,Seguidor
 from schemas import *
 import random
+from urllib.parse import urlencode
 from database import SessionLocal
 from fastapi.security import OAuth2PasswordRequestForm
 from models import *
