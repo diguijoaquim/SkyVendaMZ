@@ -157,7 +157,7 @@ async def google_auth_callback(
         }
 
         async with httpx.AsyncClient() as client:
-            # Obter token de acesso
+            # Obter token de acesso do Google
             token_response = await client.post(
                 GOOGLE_TOKEN_URI, 
                 data=data,
@@ -171,18 +171,18 @@ async def google_auth_callback(
                 )
 
             token_data = token_response.json()
-            access_token = create_access_token(subject=str(usuario.id))
+            google_access_token = token_data.get("access_token")
 
-            if not access_token:
+            if not google_access_token:
                 raise HTTPException(
                     status_code=400,
-                    detail="Token de acesso não encontrado"
+                    detail="Token de acesso do Google não encontrado"
                 )
 
-            # Obter informações do usuário
+            # Obter informações do usuário usando o token do Google
             userinfo_response = await client.get(
                 GOOGLE_USERINFO_URI,
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {google_access_token}"}
             )
             
             if userinfo_response.status_code != 200:
@@ -210,24 +210,62 @@ async def google_auth_callback(
                     google_id=userinfo["sub"],
                     foto_perfil=userinfo.get("picture"),
                     identificador_unico=identificador_unico,
-                    ativo=True
+                    ativo=True,
+                    tipo="cliente",
+                    limite_diario_publicacoes=5,
+                    data_cadastro=datetime.utcnow(),
+                    revisao="nao"
                 )
                 db.add(usuario)
                 db.commit()
                 db.refresh(usuario)
 
-            # Gerar token JWT
-            access_token = create_access_token(data={"sub": str(usuario.id)})
+                # Criar wallet para o novo usuário
+                wallet = Wallet(
+                    usuario_id=usuario.id,
+                    saldo_principal=0,
+                    saldo_bonus=0,
+                    saldo_congelado=0
+                )
+                db.add(wallet)
+                db.commit()
 
-            # Redirecionar para o frontend com o token
-            redirect_url = f"https://skyvenda-mz.vercel.app/auth/success?token={access_token}"
-            return RedirectResponse(url=redirect_url)
+            # Gerar nosso próprio token JWT
+            access_token = create_access_token(subject=str(usuario.id))
 
+            # Preparar dados do usuário para retorno
+            user_data = {
+                "id": usuario.id,
+                "email": usuario.email,
+                "nome": usuario.nome,
+                "username": usuario.username,
+                "foto_perfil": usuario.foto_perfil,
+                "tipo": usuario.tipo,
+                "conta_pro": usuario.conta_pro,
+                "identificador_unico": usuario.identificador_unico
+            }
+
+            # Redirecionar para o frontend com o token e dados do usuário
+            params = {
+                "token": access_token,
+                "user": json.dumps(user_data)
+            }
+            redirect_url = f"https://skyvenda-mz.vercel.app/auth/success?{urlencode(params)}"
+            
+            return RedirectResponse(
+                url=redirect_url,
+                status_code=302
+            )
+
+    except HTTPException as he:
+        # Redirecionar para página de erro no frontend com detalhes
+        error_url = f"https://skyvenda-mz.vercel.app/auth/error?error={he.detail}"
+        return RedirectResponse(url=error_url, status_code=302)
+        
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno: {str(e)}"
-        )
+        print(f"Erro no login Google: {str(e)}")  # Log do erro
+        error_url = "https://skyvenda-mz.vercel.app/auth/error?error=erro_interno"
+        return RedirectResponse(url=error_url, status_code=302)
         
         # URL da sua aplicação frontend
 
