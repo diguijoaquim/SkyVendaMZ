@@ -12,7 +12,7 @@ from controlers.usuario import *
 from controlers.produto import seguir_usuario,get_seguidores
 from auth import get_current_user, create_access_token, authenticate_user
 from passlib.context import CryptContext
-from datetime import datetime
+from datetime import datetime, timedelta
 from auth import *
 from fastapi.responses import RedirectResponse
 import requests
@@ -278,7 +278,11 @@ async def _create_user_wallet(db: Session, usuario: Usuario):
 async def _prepare_success_response(usuario: Usuario):
     """Prepara resposta de sucesso"""
     try:
-        access_token = create_access_token(subject=str(usuario.id))
+        # Ajustando para usar o formato correto do create_access_token
+        access_token = create_access_token(
+            user_id=usuario.id,  # Usando user_id em vez de subject
+            expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
         
         user_data = {
             "id": usuario.id,
@@ -296,16 +300,14 @@ async def _prepare_success_response(usuario: Usuario):
             "user": json.dumps(user_data)
         }
         
+        logger.info(f"Token gerado com sucesso para usuário: {usuario.id}")
         return RedirectResponse(
             url=f"{SUCCESS_URL}?{urlencode(params)}",
             status_code=status.HTTP_302_FOUND
         )
     except Exception as e:
         logger.error(f"Erro ao preparar resposta de sucesso: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao gerar token de acesso"
-        )
+        return _redirect_error("Erro ao gerar token de acesso")
 
 def _redirect_error(message: str):
     """Helper para redirecionamento de erro"""
