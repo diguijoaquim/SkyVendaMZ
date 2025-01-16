@@ -301,8 +301,8 @@ async def _prepare_success_response(usuario: Usuario):
         }
         
         logger.info(f"Token gerado com sucesso para usuário: {usuario.id}")
-        return RedirectResponse(
-            url=f"{SUCCESS_URL}?{urlencode(params)}",
+         return RedirectResponse(
+            url=f"{SUCCESS_URL}?token={access_token}",
             status_code=status.HTTP_302_FOUND
         )
     except Exception as e:
