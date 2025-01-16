@@ -278,30 +278,13 @@ async def _create_user_wallet(db: Session, usuario: Usuario):
 async def _prepare_success_response(usuario: Usuario):
     """Prepara resposta de sucesso"""
     try:
-        # Adicionando o parâmetro user_role
         access_token = create_access_token(
             user_id=usuario.id,
-            user_role=usuario.tipo  # Usando o tipo do usuário como role
+            user_role=usuario.tipo
         )
         
-        user_data = {
-            "id": usuario.id,
-            "email": usuario.email,
-            "nome": usuario.nome,
-            "username": usuario.username,
-            "foto_perfil": usuario.foto_perfil,
-            "tipo": usuario.tipo,
-            "conta_pro": usuario.conta_pro,
-            "identificador_unico": usuario.identificador_unico
-        }
-
-        params = {
-            "token": access_token,
-            "user": json.dumps(user_data)
-        }
-        
         logger.info(f"Token gerado com sucesso para usuário: {usuario.id}")
-         return RedirectResponse(
+        return RedirectResponse(
             url=f"{SUCCESS_URL}?token={access_token}",
             status_code=status.HTTP_302_FOUND
         )
