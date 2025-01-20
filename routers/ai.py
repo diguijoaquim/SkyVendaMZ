@@ -8,6 +8,6 @@ class UserMessage(BaseModel):
     message: str
     sender_id:str    
 
-@router.post("/")
+@router.post("/skai")
 def read_root(message:UserMessage):
     return getAnswer(message.sender_id,message.message)
