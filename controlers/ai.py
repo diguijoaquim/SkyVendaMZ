@@ -5,62 +5,61 @@ from pydantic import BaseModel
 import requests
 
 def getAnswer(sender_id, question):
-    # Recuperar o histórico do usuário ou criar uma lista vazia se não existir
-    if sender_id in user_history:
-        history = user_history[sender_id]
-    else:
-        history = []
+    # Recuperar ou inicializar o histórico do usuário
+    history = user_history.get(sender_id, [])
 
-    # Adicionar a nova mensagem ao histórico
+    # Adicionar a nova mensagem do usuário ao histórico
     history.append({"role": "user", "content": question})
-    
-    # Manter o histórico no limite de 10 mensagens
+
+    # Limitar o histórico a 10 mensagens
     if len(history) > 10:
         history = history[-10:]
 
-    # Adicionar o histórico ao prompt para dar contexto à IA
-    messages = [
-        {"role": "system", "content": data}
-    ] + history
+    # Criar mensagens para o modelo
+    messages = [{"role": "system", "content": data}] + history
 
-    completion = client.chat.completions.create(
-        model="Qwen/Qwen2.5-Coder-32B-Instruct",
-        messages=messages,
-        max_tokens=500
-    )
-    
-    # Obter a resposta
-    answer = completion.choices[0].message['content']
+    try:
+        # Consultar o modelo
+        completion = client.chat.completions.create(
+            model="Qwen/Qwen2.5-Coder-32B-Instruct",
+            messages=messages,
+            max_tokens=500
+        )
+        answer = completion.choices[0].message['content']
 
-    # Adicionar a resposta da IA ao histórico
-    history.append({"role": "assistant", "content": answer})
+       
 
-    # Salvar o histórico atualizado para esse usuário
-    user_history[sender_id] = history
+        # Processar resposta
+        resposta = json.loads(answer)
 
-    resposta=json.loads(answer)
-    
-    if resposta["type"]=="run_request":
-        ## run some request to the api
-        response = requests.get(resposta["url_to_fetch"])
-        resposta_api=response.json()
-        if resposta_api:
-            ai_response={
-                "type":"with_api",
-                "ai_message":resposta['if_find_items'],
-                "api_data":resposta_api
-            }
+        if resposta.get("type") == "run_request":
+            response = requests.get(resposta["url_to_fetch"])
+            resposta_api = response.json()
+
+            if resposta_api:
+                ai_response = {
+                    "type": "with_api",
+                    "ai_message": resposta['if_find_items'],
+                    "api_data": resposta_api
+                }
+            else:
+                ai_response = {
+                    "type": "without_api",
+                    "ai_message": resposta['i_not_found']
+                }
+
+            history.append({"role": "assistant", "content": json.dumps(ai_response)})
+            user_history[sender_id] = history
             return ai_response
         else:
-            ai_response={
-                "type":"without_api",
-                "ai_message":resposta['i_not_found'],
-            }
-
-            return ai_response
-        
-    else:
-        return resposta
+            user_history[sender_id] = history
+            return resposta
+    except Exception as e:
+        # Adicionar mensagem de erro ao histórico
+        error_message = {"type": "error", "message": str(e)}
+        history.append({"role": "assistant", "content": json.dumps(error_message)})
+        user_history[sender_id] = history
+        return error_message
     
 
 # Configuração do cliente da API da Hugging Face
