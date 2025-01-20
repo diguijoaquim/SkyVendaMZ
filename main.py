@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from routers.admin import router as admin_router
 from routers.comentario import router as comentario_router
+from routers.ai import router as ai_router
 from routers.denuncia_produto import router as denuncia_produto_router
 from routers.endereco_envio import router as endereco_envio_router
 from routers.info_usuario import router as info_usuario_router
@@ -70,6 +71,7 @@ app.mount("/status", StaticFiles(directory=os.path.join(BASE_UPLOAD_DIR, "status
  
 # Registrar os routers
 app.include_router(admin_router)
+app.include_router(ai_router)
 app.include_router(comentario_router)
 app.include_router(denuncia_produto_router)
 app.include_router(endereco_envio_router)

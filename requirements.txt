@@ -20,3 +20,4 @@ fastapi-utils
 mysql-connector-python
 psycopg2
 pillow
+huggingface_hub
