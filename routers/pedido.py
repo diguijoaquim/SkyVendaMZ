@@ -323,6 +323,7 @@ def listar_pedidos(
             "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
             "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
             "status": pedido.status,
+            "tipo": pedido.tipo,
             "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
             "compra": "compra",  # Pedido feito pelo usuário
             "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
@@ -341,6 +342,7 @@ def listar_pedidos(
             "preco_total": float(pedido.preco_total) if pedido.preco_total else None,
             "data_pedido": pedido.data_pedido.isoformat() if pedido.data_pedido else None,
             "status": pedido.status,
+            "tipo": pedido.tipo,
             "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
             "venda": "venda",  # Pedido recebido pelo usuário
             "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
