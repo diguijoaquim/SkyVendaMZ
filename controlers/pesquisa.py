@@ -7,6 +7,8 @@ from models import Produto,Pesquisa,Usuario,Comentario,produto_likes
 from sqlalchemy import func
 from fastapi import HTTPException
 from auth import *
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
 
 
 
@@ -31,7 +33,18 @@ def salvar_pesquisa(termo: str, categoria: str, db: Session, usuario_id: int = N
     db.refresh(pesquisa)
 
 
-# Registra a ação de pesquisa
+def fuzzy_search(query: str, choices: list, threshold: int = 80):
+    """
+    Realiza a correspondência fuzzy entre o termo de pesquisa e os dados dos produtos.
+    Retorna os itens que possuem uma similaridade superior ao limiar (threshold).
+    """
+    results = []
+    for choice in choices:
+        ratio = fuzz.partial_ratio(query.lower(), choice.lower())
+        if ratio >= threshold:  # Se a correspondência for maior ou igual ao limiar
+            results.append((choice, ratio))
+    return results
+
 def executar_pesquisa_avancada(
     termo: str, 
     db: Session = Depends(get_db),
@@ -40,46 +53,45 @@ def executar_pesquisa_avancada(
     offset: int = 1
 ):
     """
-    Pesquisa avançada por produtos com paginação e filtros.
+    Pesquisa avançada por produtos com palavras-chave usando fuzzy matching.
     """
     termos = termo.split()
+
+    # Iniciar a query com produtos ativos
     query = db.query(Produto).filter(Produto.ativo == True)
 
-    # Adicionar os filtros para as colunas
-    for palavra in termos:
-        query = query.filter(
-            or_(
-                Produto.nome.ilike(f"%{palavra}%"),
-                Produto.descricao.ilike(f"%{palavra}%"),
-                Produto.categoria.ilike(f"%{palavra}%"),
-                Produto.detalhes.ilike(f"%{palavra}%"),
-                Produto.tipo.ilike(f"%{palavra}%"),
-                Produto.provincia.ilike(f"%{palavra}%"),
-                Produto.estado.ilike(f"%{palavra}%"),
-                Produto.distrito.ilike(f"%{palavra}%")
+    # Buscar correspondências fuzzy para cada palavra-chave
+    if termos:
+        conditions = []
+        for palavra in termos:
+            # Usar fuzzy matching nos campos do produto
+            matched_nome = fuzzy_search(palavra, [p.nome for p in query.all()])
+            matched_descricao = fuzzy_search(palavra, [p.descricao for p in query.all()])
+            matched_categoria = fuzzy_search(palavra, [p.categoria for p in query.all()])
+            
+            # Adicionar filtros baseados nos matches encontrados
+            conditions.append(
+                or_(
+                    *[Produto.nome.ilike(f"%{nome}%") for nome, _ in matched_nome],
+                    *[Produto.descricao.ilike(f"%{descricao}%") for descricao, _ in matched_descricao],
+                    *[Produto.categoria.ilike(f"%{categoria}%") for categoria, _ in matched_categoria]
+                )
             )
-        )
+        query = query.filter(or_(*conditions))
 
-    # Adicionar paginação
-    produtos = query.offset(offset * limit).limit(limit).all()
-    categoria = produtos[0].categoria if produtos else None
+    # Garantir que o offset seja válido (não negativo)
+    if offset < 1:
+        offset = 1
 
-    # Salvar a pesquisa, caso nenhum produto seja encontrado
+    # Aplicar a paginação
+    produtos = query.offset((offset - 1) * limit).limit(limit).all()
+
+    # Caso não encontre produtos, salvar a pesquisa para referência futura
     if not produtos:
-        salvar_pesquisa(termo=termo, categoria=categoria, db=db, usuario_id=user_id)
+        salvar_pesquisa(termo=termo, categoria=None, db=db, usuario_id=user_id)
         return []
 
-    produtos_ordenados = combinar_produtos(produtos, db)
-    produtos_paginados = produtos_ordenados[offset: offset + limit]
-
-    usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
-    def calcular_media_estrelas(usuario_id: int):
-        avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
-        if not avaliacoes:
-            return None  # Sem avaliações
-        soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
-        return round(soma_estrelas / len(avaliacoes), 2)
-
+    # Processar as informações dos produtos encontrados
     return [
         {
             "id": produto.id,
@@ -87,52 +99,32 @@ def executar_pesquisa_avancada(
             "thumb": produto.capa,
             "images": produto.fotos,
             "price": float(produto.preco),
-            "stock_quantity": produto.quantidade_estoque,
+            "description": produto.descricao,
+            "category": produto.categoria,
             "state": produto.estado,
             "province": produto.provincia,
             "district": produto.distrito,
-            "location": produto.localizacao,
-            "review": produto.revisao,
-            "availability": produto.disponiblidade,
-            "description": produto.descricao,
-            "category": produto.categoria,
-            "details": produto.detalhes,
-            "type": produto.tipo,
-            "views": produto.visualizacoes,
-            "active": produto.ativo,
-            "customer_id": produto.CustomerID,
-            "likes": produto.likes,
-            "slug": produto.slug,
-            "time": calcular_tempo_publicacao(produto.data_publicacao),
             "user": {
                 "id": produto.usuario.id,
                 "name": produto.usuario.nome,
                 "avatar": produto.usuario.foto_perfil,
-                "average_stars": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
+                "average_stars": calcular_media_estrelas(produto.usuario.id, db),
             },
-            "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
-            "comments": [
-                {
-                    "id": comentario.id,
-                    "text": comentario.comentario,
-                    "date": calcular_tempo_publicacao(comentario.data_comentario),
-                    "user": {
-                        "id": comentador.id,
-                        "name": comentador.nome,
-                        "avatar": comentador.foto_perfil
-                    }
-                }
-                for comentario, comentador in (
-                    db.query(Comentario, Usuario)
-                    .join(Usuario, Usuario.id == Comentario.usuarioID)
-                    .filter(Comentario.produtoID == produto.id)
-                    .all()
-                )
-            ]
+            "liked": user_id in [like.user_id for like in produto.likes] if user_id else None,
         }
-        for produto in produtos_paginados
+        for produto in produtos
     ]
 
+
+def calcular_media_estrelas(usuario_id: int, db: Session):
+    """
+    Calcula a média de estrelas de um usuário baseado nas avaliações.
+    """
+    avaliacoes = db.query(Avaliacao).filter(Avaliacao.avaliado_id == usuario_id).all()
+    if not avaliacoes:
+        return None  # Sem avaliações
+    soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
+    return round(soma_estrelas / len(avaliacoes), 2)
 def eliminar_pesquisa(db: Session, pesquisa_id: int = None, usuario_id: int = None):
     """
     Elimina uma pesquisa específica ou todas as pesquisas de um usuário.
