@@ -21,3 +21,5 @@ mysql-connector-python
 psycopg2
 pillow
 huggingface_hub
+python-Levenshtein
+fuzzywuzzy
