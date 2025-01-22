@@ -1,24 +1,25 @@
 import psycopg2
 
-def excluir_criar_tabelas():
-    # Dados de conexão
+def excluir_criar_tabela_pedido():
+    # URL de conexão ao banco de dados
     DATABASE_URL = "postgresql://postgres:uCUCjSkArNRiteSTDrxMuwyldXGKeTQO@junction.proxy.rlwy.net:42999/railway"
     
     try:
-        # Conectar ao banco de dados PostgreSQL
+        # Conectar ao banco de dados
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
 
-        # Comandos SQL para excluir as tabelas, caso existam
+        print("Conexão com o banco de dados estabelecida com sucesso!")
+
+        # Comando SQL para excluir a tabela 'pedido', caso exista
         excluir_tabela_pedido = "DROP TABLE IF EXISTS pedido CASCADE;"
-        excluir_tabela_anuncio = "DROP TABLE IF EXISTS anuncio CASCADE;"
         
         # Comando SQL para criar a tabela 'pedido'
         criar_tabela_pedido = """
             CREATE TABLE pedido (
                 id SERIAL PRIMARY KEY,
-                customer_id INTEGER NOT NULL,
-                produto_id INTEGER NOT NULL,
+                customer_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+                produto_id INTEGER NOT NULL REFERENCES produto(id) ON DELETE CASCADE,
                 quantidade INTEGER NOT NULL,
                 preco_total DECIMAL,
                 status_visivel_comprador BOOLEAN DEFAULT FALSE,
@@ -31,44 +32,33 @@ def excluir_criar_tabelas():
                 data_aceite TIMESTAMP,
                 data_envio TIMESTAMP,
                 data_entrega TIMESTAMP,
-                FOREIGN KEY (customer_id) REFERENCES usuarios(id),
-                FOREIGN KEY (produto_id) REFERENCES produto(id)
+                data_confirmacao_recebimento TIMESTAMP,
+                data_limite_confirmacao TIMESTAMP
             );
         """
 
-        # Comando SQL para criar a tabela 'anuncio'
-        criar_tabela_anuncio = """
-            CREATE TABLE anuncio (
-                id SERIAL PRIMARY KEY,
-                titulo VARCHAR(350),
-                descricao TEXT,
-                tipo_anuncio VARCHAR(350),
-                produto_id INTEGER UNIQUE,
-                promovido_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                expira_em TIMESTAMP,
-                ativo BOOLEAN NOT NULL DEFAULT TRUE,
-                FOREIGN KEY (produto_id) REFERENCES produto(id)
-            );
-        """
-
-        # Executar os comandos SQL
+        # Excluindo a tabela, se existir
+        print("Excluindo a tabela 'pedido', caso exista...")
         cursor.execute(excluir_tabela_pedido)
-        cursor.execute(excluir_tabela_anuncio)
+
+        # Criando a tabela
+        print("Criando a tabela 'pedido'...")
         cursor.execute(criar_tabela_pedido)
-        cursor.execute(criar_tabela_anuncio)
 
-        # Commit para garantir que as mudanças sejam salvas no banco de dados
+        # Commit para salvar as mudanças no banco de dados
         conn.commit()
-
-        print("Tabelas 'pedido' e 'anuncio' excluídas e criadas com sucesso!")
+        print("Tabela 'pedido' criada com sucesso!")
 
     except Exception as e:
-        print(f"Erro ao excluir e criar as tabelas: {e}")
+        print(f"Erro ao excluir e criar a tabela 'pedido': {e}")
     
     finally:
-        # Fechar a conexão com o banco de dados
-        cursor.close()
-        conn.close()
+        # Fechar o cursor e a conexão com o banco de dados
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
+        print("Conexão com o banco de dados fechada.")
 
-# Chame a função
-excluir_criar_tabelas()
+# Chamar a função
+excluir_criar_tabela_pedido()

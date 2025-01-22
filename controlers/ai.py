@@ -61,7 +61,7 @@ def getAnswer(sender_id, question):
 # Configuração do cliente da API da Hugging Face
 client = InferenceClient(api_key="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")
 
-with open("controlers/data.txt", "r") as file:
+with open("controlers/data.txt", "r",encoding="utf-8") as file:
     data = file.read()
 
 user_history = {}

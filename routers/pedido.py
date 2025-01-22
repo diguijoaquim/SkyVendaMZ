@@ -622,7 +622,7 @@ def confirmar_entrega(
         )
 
     # Verificar se o pedido está em um status válido para confirmação
-    if pedido.status not in ["aceito", "pendente"]:
+    if pedido.status not in ["pendente"]:
         raise HTTPException(
             status_code=400, 
             detail=f"Não é possível confirmar a entrega de um pedido com status '{pedido.status}'"
