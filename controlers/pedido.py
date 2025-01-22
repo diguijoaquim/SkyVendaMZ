@@ -291,7 +291,7 @@ def cancelar_pedido(db: Session, pedido_id: int, usuario_id: int):
     if pedido.customer_id != usuario_id:
         raise HTTPException(status_code=403, detail="Você não tem permissão para cancelar este pedido.")
 
-    if pedido.status not in ["Pendente", "Aceito pelo Vendedor"]:
+    if pedido.status not in ["pendente", "Aceito pelo Vendedor"]:
         raise HTTPException(
             status_code=400,
             detail="Não é possível cancelar este pedido no estado atual."

@@ -280,7 +280,7 @@ def listar_pedidos(
         db.query(Pedido)
         .filter(
             Pedido.customer_id == current_user.id,
-            Pedido.status != "Eliminado",  # Excluindo pedidos eliminados
+            Pedido.status != "eliminado",  # Excluindo pedidos eliminados
             Pedido.status_visivel_comprador == False  # Pedido não eliminado para o comprador
         )
         .offset(offset)
@@ -294,7 +294,7 @@ def listar_pedidos(
         .join(Produto, Produto.id == Pedido.produto_id)
         .filter(
             Produto.CustomerID == current_user.id,  # Produto vinculado ao vendedor
-            Pedido.status != "Eliminado",  # Excluindo pedidos eliminados
+            Pedido.status != "eliminado",  # Excluindo pedidos eliminados
             Pedido.status_visivel_vendedor == False  # Pedido não eliminado para o vendedor
         )
         .offset(offset)
@@ -377,7 +377,7 @@ def eliminar_pedido(
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
 
     # Verificar se o status do pedido permite exclusão
-    if pedido.status not in ["Cancelado", "Concluido","recusado"]:
+    if pedido.status not in ["cancelado", "concluido","recusado"]:
         raise HTTPException(
             status_code=400,
             detail="Apenas pedidos com status 'Cancelado' ou 'Concluído' podem ser eliminados.",
@@ -411,7 +411,7 @@ def eliminar_pedido(
 
     # Alterar status para 'Eliminado' se ambos já eliminaram
     if pedido.recebido_pelo_cliente and pedido.aceito_pelo_vendedor:
-        pedido.status = "Eliminado"
+        pedido.status = "eliminado"
 
     # Commit das mudanças
     db.commit()
@@ -441,7 +441,7 @@ def listar_pedidos_eliminados(
         db.query(Pedido)
         .filter(
             Pedido.customer_id == current_user.id,
-            Pedido.status == "Eliminado",  # Apenas pedidos eliminados
+            Pedido.status == "eliminado",  # Apenas pedidos eliminados
         )
         .offset(offset)
         .limit(limit)
@@ -454,7 +454,7 @@ def listar_pedidos_eliminados(
         .join(Produto, Produto.id == Pedido.produto_id)
         .filter(
             Produto.CustomerID == current_user.id,  # Produto vinculado ao vendedor
-            Pedido.status == "Eliminado",  # Apenas pedidos eliminados
+            Pedido.status == "eliminado",  # Apenas pedidos eliminados
         )
         .offset(offset)
         .limit(limit)

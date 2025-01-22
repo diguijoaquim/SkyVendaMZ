@@ -32,66 +32,45 @@ def salvar_pesquisa(termo: str, categoria: str, db: Session, usuario_id: int = N
     db.commit()
     db.refresh(pesquisa)
 
-
-def fuzzy_search(query: str, choices: list, threshold: int = 80):
-    """
-    Realiza a correspondência fuzzy entre o termo de pesquisa e os dados dos produtos.
-    Retorna os itens que possuem uma similaridade superior ao limiar (threshold).
-    """
-    results = []
-    for choice in choices:
-        ratio = fuzz.partial_ratio(query.lower(), choice.lower())
-        if ratio >= threshold:  # Se a correspondência for maior ou igual ao limiar
-            results.append((choice, ratio))
-    return results
-
 def executar_pesquisa_avancada(
     termo: str, 
-    db: Session = Depends(get_db),
-    user_id: Optional[int] = None,
-    limit: int = 10,
+    db: Session, 
+    user_id: Optional[int] = None, 
+    limit: int = 10, 
     offset: int = 1
 ):
     """
-    Pesquisa avançada por produtos com palavras-chave usando fuzzy matching.
+    Pesquisa avançada por produtos com palavras-chave, incluindo fuzzy matching.
     """
     termos = termo.split()
 
-    # Iniciar a query com produtos ativos
+    # Query base com filtro de produtos ativos
     query = db.query(Produto).filter(Produto.ativo == True)
 
-    # Buscar correspondências fuzzy para cada palavra-chave
+    # Aplicar filtros exatos
     if termos:
-        conditions = []
-        for palavra in termos:
-            # Usar fuzzy matching nos campos do produto
-            matched_nome = fuzzy_search(palavra, [p.nome for p in query.all()])
-            matched_descricao = fuzzy_search(palavra, [p.descricao for p in query.all()])
-            matched_categoria = fuzzy_search(palavra, [p.categoria for p in query.all()])
-            
-            # Adicionar filtros baseados nos matches encontrados
-            conditions.append(
-                or_(
-                    *[Produto.nome.ilike(f"%{nome}%") for nome, _ in matched_nome],
-                    *[Produto.descricao.ilike(f"%{descricao}%") for descricao, _ in matched_descricao],
-                    *[Produto.categoria.ilike(f"%{categoria}%") for categoria, _ in matched_categoria]
-                )
+        query = query.filter(
+            or_(
+                *[
+                    or_(
+                        Produto.nome.ilike(f"%{palavra}%"),
+                        Produto.descricao.ilike(f"%{palavra}%"),
+                        Produto.categoria.ilike(f"%{palavra}%"),
+                    )
+                    for palavra in termos
+                ]
             )
-        query = query.filter(or_(*conditions))
-
-    # Garantir que o offset seja válido (não negativo)
+        )
     if offset < 1:
         offset = 1
-
-    # Aplicar a paginação
+    # Aplicar paginação
     produtos = query.offset((offset - 1) * limit).limit(limit).all()
 
-    # Caso não encontre produtos, salvar a pesquisa para referência futura
+    # Se não encontrar resultados, aplicar fuzzy matching
     if not produtos:
-        salvar_pesquisa(termo=termo, categoria=None, db=db, usuario_id=user_id)
-        return []
+        produtos = aplicar_fuzzy_matching(termos, db, limit, offset)
 
-    # Processar as informações dos produtos encontrados
+    # Processar os produtos encontrados
     return [
         {
             "id": produto.id,
@@ -115,6 +94,31 @@ def executar_pesquisa_avancada(
         for produto in produtos
     ]
 
+def aplicar_fuzzy_matching(termos: List[str], db: Session, limit: int, offset: int):
+    """
+    Aplica fuzzy matching para encontrar produtos com palavras-chave semelhantes.
+    """
+    threshold = 85  # Limiar mínimo de similaridade
+    produtos = db.query(Produto).filter(Produto.ativo == True).all()
+
+    # Comparar termos com nomes, descrições e categorias dos produtos
+    resultados = []
+    for produto in produtos:
+        for termo in termos:
+            score_nome = fuzz.partial_ratio(termo.lower(), produto.nome.lower())
+            score_descricao = fuzz.partial_ratio(termo.lower(), produto.descricao.lower())
+            score_categoria = fuzz.partial_ratio(termo.lower(), produto.categoria.lower())
+
+            # Verificar se algum campo atinge o limiar
+            if max(score_nome, score_descricao, score_categoria) >= threshold:
+                resultados.append((produto, max(score_nome, score_descricao, score_categoria)))
+
+    # Ordenar pelos scores mais altos e aplicar paginação
+    resultados = sorted(resultados, key=lambda x: x[1], reverse=True)
+    resultados_paginados = resultados[(offset - 1) * limit : offset * limit]
+
+    # Retornar apenas os produtos
+    return [resultado[0] for resultado in resultados_paginados]
 
 def calcular_media_estrelas(usuario_id: int, db: Session):
     """
@@ -125,6 +129,7 @@ def calcular_media_estrelas(usuario_id: int, db: Session):
         return None  # Sem avaliações
     soma_estrelas = sum(avaliacao.estrelas for avaliacao in avaliacoes)
     return round(soma_estrelas / len(avaliacoes), 2)
+    
 def eliminar_pesquisa(db: Session, pesquisa_id: int = None, usuario_id: int = None):
     """
     Elimina uma pesquisa específica ou todas as pesquisas de um usuário.
