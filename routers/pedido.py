@@ -311,6 +311,8 @@ def listar_pedidos(
             "nome_vendedor": vendedor.nome if vendedor else None,
             "nome_comprador": comprador.nome if comprador else None,
             "nome": produto.nome if produto else None,
+            "id_comprador": comprador.identificador_unico if comprador else None,
+            "id_vendedor": vendedor.identificador_unico if vendedor else None,
         }
 
     # Combina os resultados e inclui o tipo de pedido ("compra" ou "venda")
