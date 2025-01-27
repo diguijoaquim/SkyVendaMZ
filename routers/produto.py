@@ -1184,7 +1184,7 @@ async def renovar_produto(
     taxa = calcular_taxa_publicacao(Decimal(produto.preco))
     
     # Verificar se o saldo total (principal + bônus) é suficiente
-    saldo_total = current_user.wallet.saldo_principal + current_user.wallet.saldo_bonus
+    saldo_total = current_user.wallet.saldo_principal + current_user.wallet.bonus
     if saldo_total < taxa:
         raise HTTPException(status_code=400, detail="Saldo insuficiente para renovar o produto")
     
@@ -1195,7 +1195,7 @@ async def renovar_produto(
     else:
         restante -= current_user.wallet.saldo_principal
         current_user.wallet.saldo_principal = Decimal("0.0")
-        current_user.wallet.saldo_bonus -= restante
+        current_user.wallet.bonus -= restante
 
     # Atualizar o produto
     produto.ativo = True
