@@ -883,6 +883,7 @@ def listar_produtos(
             "category": produto.categoria,
             "details": produto.detalhes,
             "type": produto.tipo,
+            "negociavel": produto.negociavel,
             "views": produto.visualizacoes,
             "active": produto.ativo,
             "customer_id": produto.CustomerID,
