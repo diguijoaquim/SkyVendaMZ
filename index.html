@@ -1,116 +1,151 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login</title>
-  <style>
-    body {
-  font-family: Arial, sans-serif;
-  background-color: #f4f4f4;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  margin: 0;
-}
-
-.login-container {
-  text-align: center;
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-h1 {
-  font-size: 24px;
-  color: #333;
-}
-
-button {
-  background-color: #4285f4;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  padding: 10px 20px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #357ae8;
-}
-
-.hidden {
-  display: none;
-}
-
-#auth-message {
-  margin-top: 20px;
-  font-size: 18px;
-  color: #555;
-}
-
-  </style>
-  <link rel="stylesheet" href="styles.css">
+    <title>Mensagem para Vendedor</title>
+    <style>
+        .chat-container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        .message-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .send-button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .send-button:hover {
+            background-color: #0056b3;
+        }
+        .messages-list {
+            margin-top: 20px;
+        }
+        .message-item {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
+    <div class="chat-container">
+        <h2>Mensagem para Vendedor</h2>
+        
+        <!-- Formulário de mensagem -->
+        <div class="message-form">
+            <input type="text" id="mensagem" class="message-input" placeholder="Digite sua mensagem...">
+            <button onclick="enviarMensagem()" class="send-button">Enviar</button>
+        </div>
+        
+        <!-- Lista de mensagens -->
+        <div id="mensagens" class="messages-list"></div>
+    </div>
 
-  <div class="login-container">
-    <h1>Login com Google</h1>
-    <button id="google-login-button">Login com Google</button>
-    <div id="auth-message" class="hidden">Autenticando...</div>
-  </div>
+    <script>
+        // Configurações
+        const API_URL = 'http://127.0.0.1:5000';
+        const PRODUTO_ID = '2'; // ID do produto que você quer enviar mensagem
+        const TOKEN = ' eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwicm9sZSI6Im5ob25ndWlzdGEiLCJleHAiOjE3NDAzMDEwMjV9.8CN3oLdvG4uEsqZMTipV4FJAkLPKpiR5IknT9VXUMpQ'; // Token de autenticação
 
-  <script>
+        // Função para enviar mensagem
+        async function enviarMensagem() {
+            const mensagemInput = document.getElementById('mensagem');
+            const mensagem = mensagemInput.value;
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Adicionar script do Google OAuth
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.async = true;
-  script.defer = true;
-  document.body.appendChild(script);
+            if (!mensagem.trim()) {
+                alert('Por favor, digite uma mensagem');
+                return;
+            }
 
-  const googleLoginButton = document.getElementById('google-login-button');
-  const authMessage = document.getElementById('auth-message');
+            try {
+                const formData = new FormData();
+                formData.append('mensagem', mensagem);
 
-  // Função para login com Google
-  googleLoginButton.addEventListener('click', () => {
-    const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
-    const options = {
-      client_id: '176605076915-cvolrc3k1hjlkedlu7b9c19hi8ft7tuc.apps.googleusercontent.com',
-      redirect_uri: 'https://skyvendamz.up.railway.app/usuario/auth/callback',
-      response_type: 'code',
-      scope: 'email profile',
-      access_type: 'offline',
-      prompt: 'consent',
-    };
+                const response = await fetch(`${API_URL}/mensagem/produto/${PRODUTO_ID}/mensagem`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`
+                    },
+                    body: formData
+                });
 
-    const queryString = new URLSearchParams(options).toString();
-    window.location.href = `${baseUrl}?${queryString}`;
-  });
+                if (!response.ok) {
+                    throw new Error('Erro ao enviar mensagem');
+                }
 
-  // Verificar se o token está na URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('token');
+                const data = await response.json();
+                console.log('Mensagem enviada:', data);
 
-  if (token) {
-    // Mostrar mensagem de autenticação
-    authMessage.classList.remove('hidden');
-    authMessage.textContent = 'Autenticando...';
+                // Limpar input após envio
+                mensagemInput.value = '';
 
-    // Salvar token no localStorage
-    localStorage.setItem('token', token);
+                // Atualizar lista de mensagens
+                carregarMensagens();
 
-    // Redirecionar para a página principal após 2 segundos
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 2000);
-  }
-});
+            } catch (error) {
+                console.error('Erro:', error);
+                alert('Erro ao enviar mensagem');
+            }
+        }
 
-  </script>
+        // Função para carregar mensagens
+        async function carregarMensagens() {
+            try {
+                const response = await fetch(`${API_URL}/mensagem/produto/${PRODUTO_ID}/conversas`, {
+                    headers: {
+                        'Authorization': `Bearer ${TOKEN}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar mensagens');
+                }
+
+                const data = await response.json();
+                exibirMensagens(data.mensagens);
+
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        // Função para exibir mensagens na tela
+        function exibirMensagens(mensagens) {
+            const mensagensDiv = document.getElementById('mensagens');
+            mensagensDiv.innerHTML = mensagens.map(msg => `
+                <div class="message-item">
+                    <strong>${msg.remetente.nome}:</strong>
+                    <p>${msg.conteudo}</p>
+                    <small>${new Date(msg.data).toLocaleString()}</small>
+                </div>
+            `).join('');
+        }
+
+        // Carregar mensagens ao iniciar
+        carregarMensagens();
+
+        // Opcional: Atualizar mensagens periodicamente
+        setInterval(carregarMensagens, 10000); // Atualiza a cada 10 segundos
+    </script>
 </body>
 </html>

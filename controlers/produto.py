@@ -7,7 +7,7 @@ from typing import List, Optional
 from models import *
 from schemas import ProdutoCreate, ProdutoUpdate
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, and_, case
 from PIL import Image
 from controlers.pedido import enviar_notificacao
 from sqlalchemy.future import select
@@ -19,6 +19,7 @@ from PIL import Image
 from controlers.utils import *
 import shutil
 from controlers.taxas import calcular_taxa_publicacao,calcular_custo_anuncio
+from database import SessionLocal
 
 
 PRODUCT_UPLOAD_DIR = "uploads/produto"
@@ -410,25 +411,18 @@ def listar_anuncios_com_produtos(db: Session):
 
 
 
-def get_produto_detalhado(db: Session, slug: str,usuario_id: Optional[int] = None):
+def get_produto_detalhado(db: Session, slug: str, usuario_id: Optional[int] = None):
     """
-    Retorna os detalhes do produto, incluindo foto, nome, comentários, categoria, preço,
-    nome do usuário que publicou, data, disponibilidade, total de likes e usuários que deram like,
-    e incrementa o número de visualizações do produto.
-    
-    Args:
-        db (Session): Sessão do banco de dados.
-        slug (str): Slug do produto.
-    
-    Returns:
-        dict: Detalhes do produto.
+    Retorna os detalhes do produto.
     """
-    # Busca o produto pelo slug
     produto = db.query(Produto).filter(Produto.slug == slug).first()
-    
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     
+    # Se não for o dono do produto, só pode ver se estiver ativo
+    if usuario_id != produto.CustomerID and not produto.ativo:
+        raise HTTPException(status_code=404, detail="Produto não encontrado ou não está ativo.")
+
     # Incrementa o número de visualizações
     produto.visualizacoes += 1
     db.add(produto)
@@ -621,18 +615,12 @@ def combinar_produtos(produtos: List[Produto], db: Session):
 
 def get_all_produtos(db: Session):
     """
-    Função para buscar todos os produtos ativos e com revisão marcada como 'sim'.
-    
-    Args:
-        db (Session): Sessão do banco de dados.
-    
-    Returns:
-        List[Produto]: Lista de produtos ativos e com revisão 'sim'.
+    Função para buscar todos os produtos ativos.
     """
-    produtos = db.query(Produto).filter(Produto.ativo == True, Produto.revisao == "sim").all()
+    produtos = db.query(Produto).filter(Produto.ativo == True).all()
 
     if not produtos:
-        raise HTTPException(status_code=404, detail="Nenhum produto ativo encontrado com revisão 'sim'.")
+        raise HTTPException(status_code=404, detail="Nenhum produto ativo encontrado.")
     
     return produtos
 
@@ -923,3 +911,212 @@ def categorias_mais_populares(db: Session):
     )
 
     return [{"categoria": c[0], "total_interacoes": c[1]} for c in categorias]
+
+async def verificar_produtos_expiracao():
+    """
+    Verifica produtos próximos da expiração e produtos expirados.
+    - Envia notificações para produtos que expiram em 3 dias
+    - Desativa produtos expirados
+    """
+    db = SessionLocal()
+    try:
+        # Data atual
+        agora = datetime.utcnow()
+        
+        # 1. Verificar produtos próximos da expiração (3 dias)
+        limite_notificacao = agora - timedelta(days=27)  # 30 - 3 dias
+        produtos_proximos = db.query(Produto).filter(
+            and_(
+                Produto.ativo == True,
+                Produto.data_publicacao <= limite_notificacao
+            )
+        ).all()
+
+        # Enviar notificações para produtos próximos da expiração
+        for produto in produtos_proximos:
+            dias_restantes = 30 - (agora - produto.data_publicacao).days
+            
+            # Criar notificação
+            notificacao = Notificacao(
+                usuario_id=produto.CustomerID,
+                mensagem=f"Seu produto '{produto.nome}' irá expirar em {dias_restantes} dias. Considere renovar a publicação.",
+                data=agora
+            )
+            db.add(notificacao)
+
+        # 2. Desativar produtos expirados
+        produtos_expirados = db.query(Produto).filter(
+            and_(
+                Produto.ativo == True,
+                Produto.data_publicacao <= (agora - timedelta(days=30))
+            )
+        ).all()
+
+        for produto in produtos_expirados:
+            produto.ativo = False
+            
+            # Notificar o usuário sobre a expiração
+            notificacao = Notificacao(
+                usuario_id=produto.CustomerID,
+                mensagem=f"Seu produto '{produto.nome}' expirou e foi desativado. Para reativá-lo, acesse suas publicações.",
+                data=agora
+            )
+            db.add(notificacao)
+
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+def get_produtos_destacados(db: Session, limit: int = 10):
+    """
+    Retorna uma mistura de produtos baseado em:
+    1. Produtos recentes
+    2. Produtos mais visualizados
+    3. Produtos mais curtidos
+    4. Produtos com mais interações (mensagens/pedidos)
+    """
+    try:
+        # Produtos recentes (últimos 7 dias)
+        recentes = db.query(Produto).filter(
+            Produto.ativo == True,
+            Produto.data_publicacao >= datetime.utcnow() - timedelta(days=7)
+        ).order_by(
+            Produto.data_publicacao.desc()
+        ).limit(limit).all()
+
+        # Produtos mais visualizados
+        populares = db.query(Produto).filter(
+            Produto.ativo == True
+        ).order_by(
+            Produto.visualizacoes.desc()
+        ).limit(limit).all()
+
+        # Produtos com mais likes
+        mais_curtidos = db.query(Produto).filter(
+            Produto.ativo == True
+        ).order_by(
+            Produto.likes.desc()
+        ).limit(limit).all()
+
+        # Produtos com mais interações (mensagens + pedidos)
+        interacoes = db.query(
+            Produto,
+            func.count(Message.id).label('total_mensagens'),
+            func.count(Pedido.id).label('total_pedidos')
+        ).outerjoin(
+            Message, Message.produto_id == Produto.id
+        ).outerjoin(
+            Pedido, Pedido.produto_id == Produto.id
+        ).filter(
+            Produto.ativo == True
+        ).group_by(
+            Produto.id
+        ).order_by(
+            (func.count(Message.id) + func.count(Pedido.id)).desc()
+        ).limit(limit).all()
+
+        # Combinar todos os produtos
+        todos_produtos = []
+        produtos_ids = set()  # Para evitar duplicatas
+
+        # Função para adicionar produto se ainda não estiver na lista
+        def adicionar_produto(produto):
+            if produto.id not in produtos_ids and produto.ativo:
+                todos_produtos.append(produto)
+                produtos_ids.add(produto.id)
+
+        # Adicionar produtos de cada categoria
+        for produto in recentes:
+            adicionar_produto(produto)
+        
+        for produto in populares:
+            adicionar_produto(produto)
+            
+        for produto in mais_curtidos:
+            adicionar_produto(produto)
+            
+        for produto, _, _ in interacoes:
+            adicionar_produto(produto)
+
+        # Embaralhar a lista final
+        random.shuffle(todos_produtos)
+
+        # Retornar apenas o número solicitado de produtos
+        return todos_produtos[:limit]
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar produtos destacados: {str(e)}"
+        )
+
+def get_produtos_home(db: Session, limit: int = 10):
+    """
+    Retorna produtos para a página inicial usando um sistema de pontuação
+    que considera visualizações, likes e data de publicação.
+    """
+    try:
+        # Data atual e limite para produtos recentes (7 dias)
+        agora = datetime.utcnow()
+        limite_recentes = agora - timedelta(days=7)
+
+        # Buscar produtos ativos
+        produtos = db.query(Produto).filter(
+            Produto.ativo == True
+        ).all()
+
+        # Calcular pontuação para cada produto
+        produtos_pontuados = []
+        for produto in produtos:
+            pontuacao = 0
+            
+            # Produtos recentes (100 pontos)
+            if produto.data_publicacao >= limite_recentes:
+                pontuacao += 100
+            
+            # Visualizações (até 50 pontos)
+            pontuacao += min(produto.visualizacoes, 50)
+            
+            # Likes (até 100 pontos)
+            pontuacao += min(produto.likes * 2, 100)
+            
+            # Decaimento temporal (diminui gradualmente após 30 dias)
+            dias_ativo = (agora - produto.data_publicacao).days
+            fator_tempo = max(0.1, 1.0 - (dias_ativo / 30))
+            
+            pontuacao_final = pontuacao * fator_tempo
+            produtos_pontuados.append((produto, pontuacao_final))
+
+        # Ordenar por pontuação
+        produtos_pontuados.sort(key=lambda x: x[1], reverse=True)
+
+        # Adicionar aleatoriedade controlada
+        if len(produtos_pontuados) > limit:
+            candidatos = produtos_pontuados[:limit*2]
+            
+            # Dividir em dois grupos
+            melhores = candidatos[:limit//2]  # 50% melhores
+            outros = candidatos[limit//2:]    # Restantes
+            
+            # Embaralhar cada grupo
+            random.shuffle(melhores)
+            random.shuffle(outros)
+            
+            # Combinar os grupos
+            selecionados = melhores[:limit//2] + outros[:limit//2]
+        else:
+            selecionados = produtos_pontuados
+
+        # Retornar apenas os produtos
+        return [produto for produto, _ in selecionados[:limit]]
+
+    except Exception as e:
+        print(f"Erro detalhado: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar produtos para home: {str(e)}"
+        )

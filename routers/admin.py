@@ -2,7 +2,7 @@ from controlers.admin import *
 from controlers.usuario import listar_usuarios_nao_verificados
 from schemas import *
 from controlers.info_usuario import *
-from models import InfoUsuario,Produto,Transacao,Wallet
+from models import InfoUsuario,Produto,Transacao,Wallet, Pedido
 from auth import *
 from sqlalchemy import func
 from controlers.usuario import ativar_usuario,delete_usuario_db,desativar_usuario
@@ -11,6 +11,9 @@ from fastapi import APIRouter,Query
 from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
 from controlers.produto import calcular_tempo_publicacao
 from sqlalchemy.orm import joinedload
+from typing import List, Optional
+from datetime import datetime
+from decimal import Decimal
 
 router=APIRouter(prefix="/admin", tags=["rotas de admin"] )
 
@@ -407,3 +410,167 @@ def listar_transacoes_usuario(
         }
         for transacao in transacoes
     ]
+
+# Rota para listar todos os pedidos com filtros
+@router.get("/pedidos")
+def listar_todos_pedidos(
+    db: Session = Depends(get_db),
+    skip: int = Query(0, description="Número de registros para pular"),
+    limit: int = Query(100, description="Limite de registros por página"),
+    status: Optional[str] = Query(None, description="Filtrar por status"),
+    data_inicio: Optional[datetime] = Query(None, description="Data inicial"),
+    data_fim: Optional[datetime] = Query(None, description="Data final"),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    """
+    Lista todos os pedidos do sistema com opções de filtro.
+    Apenas administradores têm acesso.
+    """
+    query = db.query(Pedido)
+
+    # Aplicar filtros
+    if status:
+        query = query.filter(Pedido.status == status)
+    if data_inicio:
+        query = query.filter(Pedido.data_pedido >= data_inicio)
+    if data_fim:
+        query = query.filter(Pedido.data_pedido <= data_fim)
+
+    # Contar total antes da paginação
+    total_pedidos = query.count()
+
+    # Aplicar paginação
+    pedidos = query.offset(skip).limit(limit).all()
+
+    if not pedidos:
+        raise HTTPException(status_code=404, detail="Nenhum pedido encontrado")
+
+    # Formatar resposta
+    return {
+        "total": total_pedidos,
+        "pedidos": [
+            {
+                "id": pedido.id,
+                "produto": {
+                    "id": pedido.produto.id,
+                    "nome": pedido.produto.nome,
+                    "preco": float(pedido.produto.preco)
+                },
+                "comprador": {
+                    "id": pedido.customer.id,
+                    "nome": pedido.customer.nome,
+                    "email": pedido.customer.email
+                },
+                "vendedor": {
+                    "id": pedido.produto.usuario.id,
+                    "nome": pedido.produto.usuario.nome,
+                    "email": pedido.produto.usuario.email
+                },
+                "quantidade": pedido.quantidade,
+                "preco_total": float(pedido.preco_total),
+                "status": pedido.status,
+                "tipo": pedido.tipo,
+                "data_pedido": pedido.data_pedido.isoformat(),
+                "data_aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+                "data_envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+                "data_entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None
+            }
+            for pedido in pedidos
+        ]
+    }
+
+# Rota para obter detalhes de um pedido específico
+@router.get("/pedidos/{pedido_id}")
+def obter_detalhes_pedido(
+    pedido_id: int,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    """
+    Obtém detalhes completos de um pedido específico.
+    Apenas administradores têm acesso.
+    """
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    # Formatar resposta detalhada
+    return {
+        "pedido": {
+            "id": pedido.id,
+            "status": pedido.status,
+            "quantidade": pedido.quantidade,
+            "preco_total": float(pedido.preco_total),
+            "tipo": pedido.tipo,
+            "datas": {
+                "pedido": pedido.data_pedido.isoformat(),
+                "aceite": pedido.data_aceite.isoformat() if pedido.data_aceite else None,
+                "envio": pedido.data_envio.isoformat() if pedido.data_envio else None,
+                "entrega": pedido.data_entrega.isoformat() if pedido.data_entrega else None,
+                "confirmacao": pedido.data_confirmacao_recebimento.isoformat() if pedido.data_confirmacao_recebimento else None
+            }
+        },
+        "produto": {
+            "id": pedido.produto.id,
+            "nome": pedido.produto.nome,
+            "preco_unitario": float(pedido.produto.preco),
+            "categoria": pedido.produto.categoria,
+            "descricao": pedido.produto.descricao
+        },
+        "comprador": {
+            "id": pedido.customer.id,
+            "nome": pedido.customer.nome,
+            "email": pedido.customer.email,
+            "telefone": pedido.customer.contacto
+        },
+        "vendedor": {
+            "id": pedido.produto.usuario.id,
+            "nome": pedido.produto.usuario.nome,
+            "email": pedido.produto.usuario.email,
+            "telefone": pedido.produto.usuario.contacto
+        },
+        "status_detalhado": {
+            "aceito_pelo_vendedor": pedido.aceito_pelo_vendedor,
+            "recebido_pelo_cliente": pedido.recebido_pelo_cliente,
+            "status_visivel_comprador": pedido.status_visivel_comprador,
+            "status_visivel_vendedor": pedido.status_visivel_vendedor
+        }
+    }
+
+# Rota para atualizar o status de um pedido
+@router.put("/pedidos/{pedido_id}/status")
+def atualizar_status_pedido(
+    pedido_id: int,
+    novo_status: str,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    """
+    Atualiza o status de um pedido.
+    Apenas administradores têm acesso.
+    """
+    pedido = db.query(Pedido).filter(Pedido.id == pedido_id).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+    # Lista de status válidos
+    status_validos = ["pendente", "aceito", "enviado", "entregue", "cancelado", "concluido"]
+    if novo_status not in status_validos:
+        raise HTTPException(status_code=400, detail=f"Status inválido. Status válidos: {', '.join(status_validos)}")
+
+    # Atualizar status
+    pedido.status = novo_status
+    
+    # Atualizar datas relevantes
+    if novo_status == "aceito":
+        pedido.data_aceite = datetime.utcnow()
+    elif novo_status == "enviado":
+        pedido.data_envio = datetime.utcnow()
+    elif novo_status == "entregue":
+        pedido.data_entrega = datetime.utcnow()
+    elif novo_status == "concluido":
+        pedido.data_confirmacao_recebimento = datetime.utcnow()
+
+    db.commit()
+
+    return {"message": f"Status do pedido atualizado para {novo_status}"}

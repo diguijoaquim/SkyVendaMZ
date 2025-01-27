@@ -3,12 +3,13 @@ from controlers.pesquisa import *
 from schemas import *
 from auth import *
 from models import Message, MessageType,Avaliacao
-from fastapi import APIRouter,Form,File,Query
+from fastapi import APIRouter,Form,File,Query,Body
 from decimal import Decimal
-from sqlalchemy.sql.expression import func
+from sqlalchemy.sql.expression import func, or_, and_
 import random
 from uuid import uuid4
 from typing import List
+from datetime import datetime, timedelta
 
 
 router=APIRouter(prefix="/produtos",tags=["rotas de produtos"])
@@ -91,7 +92,12 @@ def listar_anuncios_aleatorios(
     stmt = (
         select(Anuncio, Produto)
         .join(Produto, Anuncio.produto_id == Produto.id)
-        .where(Anuncio.ativo == True)  # Filtrar apenas anúncios ativos
+        .where(
+            and_(
+                Anuncio.ativo == True,
+                Produto.ativo == True
+            )
+        )
         .order_by(func.random())  # Ordenação aleatória
     )
     
@@ -247,15 +253,33 @@ def pesquisa_avancada(
     user_id: Optional[int] = Query(None, description="ID opcional do usuário")
 ):
     """
-    Rota para pesquisa avançada de produtos.
+    Rota para pesquisa avançada de produtos ativos.
     """
-    produtos = executar_pesquisa_avancada(
-        termo=termo, 
-        offset=offset, 
-        limit=limit, 
-        db=db, 
-        user_id=user_id
+    query = db.query(Produto)
+    
+    if user_id:
+        # Se for um usuário específico, mostra seus produtos + produtos ativos de outros
+        query = query.filter(
+            or_(
+                Produto.CustomerID == user_id,
+                and_(Produto.ativo == True, Produto.CustomerID != user_id)
+            )
+        )
+    else:
+        # Se não for especificado usuário, mostra apenas produtos ativos
+        query = query.filter(Produto.ativo == True)
+
+    # Aplicar filtro de pesquisa
+    query = query.filter(
+        or_(
+            Produto.nome.ilike(f"%{termo}%"),
+            Produto.descricao.ilike(f"%{termo}%"),
+            Produto.categoria.ilike(f"%{termo}%")
+        )
     )
+
+    produtos = query.offset(offset).limit(limit).all()
+    
     return produtos
 
 
@@ -369,6 +393,9 @@ def obter_produto(
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     
+    # Se não for o dono e o produto não estiver ativo, retorna 404
+    if user_id != produto.CustomerID and not produto.ativo:
+        raise HTTPException(status_code=404, detail="Produto não encontrado ou não está ativo.")
 
     # Verificar se o usuário deu like
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
@@ -577,6 +604,9 @@ def obter_produto(
     if not produto:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     
+    if  not produto.ativo:
+        raise HTTPException(status_code=404, detail="Produto não encontrado ou não está ativo.")
+
     # Aumentar as visualizações do produto
     produto.visualizacoes += 1
     db.commit()
@@ -813,25 +843,13 @@ def listar_produtos(
     offset: int = Query(0, description="Ponto inicial para a paginação")
 ):
     """
-    Lista produtos com informações detalhadas, incluindo comentários e detalhes dos comentadores.
-    - Prioriza produtos recentes com ordem aleatória.
-    - Lista demais produtos organizados por peso.
-
-    Args:
-        user_id (int): ID do usuário opcional para verificar os likes.
-        limit (int): Quantidade de produtos a exibir por página.
-        offset (int): Índice de início da listagem para paginação.
-
-    Returns:
-        List[dict]: Lista paginada com detalhes específicos dos produtos, comentários e comentadores.
+    Lista produtos ativos com informações detalhadas e ordenados por relevância.
     """
-    produtos = db.query(Produto).all()
+    # Buscar produtos usando o sistema de pontuação
+    produtos = get_produtos_home(db, limit)
 
     if not produtos:
         raise HTTPException(status_code=404, detail="Nenhum produto encontrado.")
-
-    produtos_ordenados = combinar_produtos(produtos, db)
-    produtos_paginados = produtos_ordenados[offset: offset + limit]
 
     # Consulta o usuário apenas se user_id for fornecido
     usuario = db.query(Usuario).filter(Usuario.id == user_id).first() if user_id else None
@@ -873,7 +891,7 @@ def listar_produtos(
                 "id": produto.usuario.id,
                 "name": produto.usuario.nome,
                 "avatar": produto.usuario.foto_perfil,
-                "average_stars": calcular_media_estrelas(produto.usuario.id),  # Média de estrelas do usuário
+                "average_stars": calcular_media_estrelas(produto.usuario.id),
             },
             "liked": usuario in produto.usuarios_que_deram_like if usuario else None,
             "comments": [
@@ -895,7 +913,7 @@ def listar_produtos(
                 )
             ]
         }
-        for produto in produtos_paginados
+        for produto in produtos
     ]
 
 
@@ -907,9 +925,8 @@ def get_produtos_usuario_logado(
     limit: int = Query(10, ge=1, le=100, description="Número máximo de registros a retornar."),
 ):
     """
-    Rota que retorna todos os produtos do usuário logado com paginação.
+    Rota que retorna todos os produtos do usuário logado (ativos e inativos)
     """
-    # Query com paginação
     produtos_query = db.query(Produto).filter(Produto.CustomerID == current_user.id)
     total_produtos = produtos_query.count()
     produtos = produtos_query.offset(skip).limit(limit).all()
@@ -1142,5 +1159,72 @@ def detalhes_publicacao(
                 }
             }
             for comentario in comentarios
+        ]
+    }
+
+@router.post("/{produto_id}/renovar")
+async def renovar_produto(
+    produto_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Renova um produto expirado por mais 30 dias.
+    """
+    # Buscar o produto
+    produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+        
+    # Verificar se o usuário é dono do produto
+    if produto.CustomerID != current_user.id:
+        raise HTTPException(status_code=403, detail="Não autorizado a renovar este produto")
+    
+    # Atualizar produto
+    produto.ativo = True
+    produto.data_publicacao = datetime.utcnow()  # Reset da data de publicação
+    
+    db.commit()
+    
+    return {
+        "message": "Produto renovado com sucesso",
+        "nova_data_expiracao": produto.data_publicacao + timedelta(days=30)
+    }
+
+@router.get("/destaques/")
+def listar_produtos_destacados(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista produtos destacados combinando recentes, populares e mais interagidos.
+    """
+    produtos = get_produtos_destacados(db, limit)
+    
+    return {
+        "total": len(produtos),
+        "produtos": [
+            {
+                "id": p.id,
+                "nome": p.nome,
+                "descricao": p.descricao,
+                "preco": float(p.preco),
+                "categoria": p.categoria,
+                "capa": p.capa,
+                "slug": p.slug,
+                "visualizacoes": p.visualizacoes,
+                "likes": p.likes,
+                "data_publicacao": p.data_publicacao.isoformat(),
+                "vendedor": {
+                    "id": p.usuario.id,
+                    "nome": p.usuario.nome,
+                    "username": p.usuario.username
+                },
+                "metricas": {
+                    "tempo_publicado": calcular_tempo_publicacao(p.data_publicacao),
+                    "popularidade": p.visualizacoes + p.likes
+                }
+            }
+            for p in produtos
         ]
     }

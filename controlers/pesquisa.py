@@ -56,6 +56,7 @@ def executar_pesquisa_avancada(
                         Produto.nome.ilike(f"%{palavra}%"),
                         Produto.descricao.ilike(f"%{palavra}%"),
                         Produto.categoria.ilike(f"%{palavra}%"),
+                        Produto.tipo.ilike(f"%{palavra}%"),
                     )
                     for palavra in termos
                 ]

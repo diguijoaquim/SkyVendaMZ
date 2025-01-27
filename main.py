@@ -23,13 +23,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from controlers.scheduler import init_scheduler
+from controlers.produto import verificar_produtos_expiracao
 
 import logging
 
 app = FastAPI(swagger_ui_parameters={"defaultModelsExpandDepth": -1})
 
+# Inicializa o scheduler
 init_scheduler(app)
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,6 +99,11 @@ def video():
 ######Teste#####
  
 Base.metadata.create_all(bind=engine)
+
+@app.on_event("startup")
+@repeat_every(seconds=60 * 60 * 12)  # Executa a cada 12 horas
+async def verificar_expiracoes():
+    await verificar_produtos_expiracao()
 
 if __name__ == "__main__":
      import uvicorn
