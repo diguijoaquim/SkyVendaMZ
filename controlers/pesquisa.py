@@ -82,6 +82,7 @@ def executar_pesquisa_avancada(
             "description": produto.descricao,
             "category": produto.categoria,
             "state": produto.estado,
+            "negociavel": produto.negociavel,
             "province": produto.provincia,
             "district": produto.distrito,
             "user": {
