@@ -1169,7 +1169,7 @@ async def renovar_produto(
     current_user: Usuario = Depends(get_current_user)
 ):
     """
-    Renova um produto expirado por mais 30 dias.
+    Renova um produto expirado por mais 30 dias, descontando a taxa do saldo principal ou bônus do usuário.
     """
     # Buscar o produto
     produto = db.query(Produto).filter(Produto.id == produto_id).first()
@@ -1180,16 +1180,38 @@ async def renovar_produto(
     if produto.CustomerID != current_user.id:
         raise HTTPException(status_code=403, detail="Não autorizado a renovar este produto")
     
-    # Atualizar produto
+    # Calcular a taxa de renovação com base no valor do produto
+    taxa = calcular_taxa_publicacao(Decimal(produto.preco))
+    
+    # Verificar se o saldo total (principal + bônus) é suficiente
+    saldo_total = current_user.wallet.saldo_principal + current_user.wallet.saldo_bonus
+    if saldo_total < taxa:
+        raise HTTPException(status_code=400, detail="Saldo insuficiente para renovar o produto")
+    
+    # Descontar do saldo principal e complementar com bônus, se necessário
+    restante = taxa
+    if current_user.wallet.saldo_principal >= restante:
+        current_user.wallet.saldo_principal -= restante
+    else:
+        restante -= current_user.wallet.saldo_principal
+        current_user.wallet.saldo_principal = Decimal("0.0")
+        current_user.wallet.saldo_bonus -= restante
+
+    # Atualizar o produto
     produto.ativo = True
     produto.data_publicacao = datetime.utcnow()  # Reset da data de publicação
-    
+
+    # Commit no banco de dados
     db.commit()
     
     return {
         "message": "Produto renovado com sucesso",
-        "nova_data_expiracao": produto.data_publicacao + timedelta(days=30)
+        "nova_data_expiracao": produto.data_publicacao + timedelta(days=30),
+        "taxa_descontada": float(taxa),
+        "saldo_principal_restante": float(current_user.wallet.saldo_principal),
+        "saldo_bonus_restante": float(current_user.wallet.saldo_bonus)
     }
+
 
 @router.get("/destaques/")
 def listar_produtos_destacados(
