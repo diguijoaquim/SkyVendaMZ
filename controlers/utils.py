@@ -39,6 +39,22 @@ def registrar_acao_com_categoria(
     db.commit()
     return log
 
+
+def formatar_contagem(numero: int) -> str:
+    """
+    Formata um número para um formato mais amigável, como '1 mil', '2 mil' etc.
+    :param numero: O número a ser formatado.
+    :return: Uma string representando o número formatado.
+    """
+    if numero >= 1_000_000:
+        return f"{numero // 1_000_000}M"  # Milhões
+    elif numero >= 1_000:
+        return f"{numero // 1_000} mil"  # Milhares
+    else:
+        return str(numero)  # Números menores que mil são retornados como estão
+
+
+
 def gerar_identificador_unico(db: Session):
     """
     Gera um identificador único no formato "sk-123456789".

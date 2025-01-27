@@ -1,6 +1,7 @@
 from controlers.produto import *
 from controlers.pesquisa import *
 from schemas import *
+from controlers.utils import *
 from auth import *
 from models import Message, MessageType,Avaliacao
 from fastapi import APIRouter,Form,File,Query,Body
@@ -175,8 +176,8 @@ async def get_produto(produto_id: int, db: Session = Depends(get_db)):
         "categoria": produto.categoria,
         "detalhes": produto.detalhes,
         "tipo": produto.tipo,
-        "visualizacoes": produto.visualizacoes,
-        "likes": produto.likes,
+        "visualizacoes": formatar_contagem(produto.visualizacoes),
+        "likes": formatar_contagem(produto.likes),
         "data_publicacao": tempo_publicacao
     }
 
@@ -427,10 +428,10 @@ def obter_produto(
             "category": produto.categoria,
             "details": produto.detalhes,
             "type": produto.tipo,
-            "views": produto.visualizacoes,
+            "views": formatar_contagem(produto.visualizacoes),
             "active": produto.ativo,
             "customer_id": produto.CustomerID,
-            "likes": produto.likes,
+            "likes": formatar_contagem(produto.likes),
             "slug": produto.slug,
             "time": calcular_tempo_publicacao(produto.data_publicacao),
             "user": {
@@ -643,10 +644,10 @@ def obter_produto(
             "negociavel": produto.negociavel,
             "details": produto.detalhes,
             "type": produto.tipo,
-            "views": produto.visualizacoes,
+            "views": formatar_contagem(produto.visualizacoes),
             "active": produto.ativo,
             "customer_id": produto.CustomerID,
-            "likes": produto.likes,
+            "likes": formatar_contagem(produto.likes),
             "slug": produto.slug,
             "time": calcular_tempo_publicacao(produto.data_publicacao),
             "user": {
@@ -884,10 +885,10 @@ def listar_produtos(
             "details": produto.detalhes,
             "type": produto.tipo,
             "negociavel": produto.negociavel,
-            "views": produto.visualizacoes,
+            "views": formatar_contagem(produto.visualizacoes),
             "active": produto.ativo,
             "customer_id": produto.CustomerID,
-            "likes": produto.likes,
+            "likes": formatar_contagem(produto.likes),
             "slug": produto.slug,
             "time": calcular_tempo_publicacao(produto.data_publicacao),
             "user": {
@@ -919,27 +920,37 @@ def listar_produtos(
         for produto in produtos
     ]
 
-
 @router.get("/produtos/")
 def get_produtos_usuario_logado(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
-    skip: int = Query(0, ge=0, description="Número de registros a pular para paginação."),
-    limit: int = Query(10, ge=1, le=100, description="Número máximo de registros a retornar."),
+    q: Optional[str] = Query(None, description="Texto para buscar nos produtos.")  # Novo parâmetro para pesquisa
 ):
     """
-    Rota que retorna todos os produtos do usuário logado (ativos e inativos)
+    Rota que retorna todos os produtos do usuário logado (ativos e inativos) com suporte à pesquisa.
     """
-    produtos_query = db.query(Produto).filter(Produto.CustomerID == current_user.id)
-    total_produtos = produtos_query.count()
-    produtos = produtos_query.offset(skip).limit(limit).all()
+    # Iniciar consulta básica com filtro pelo usuário logado
+    produtos_query = db.query(Produto).filter(Produto.CustomerID == current_user.id).all()
 
-    if not produtos:
+    # Adicionar filtro de pesquisa, se fornecido
+    if q:
+        produtos_query = produtos_query.filter(
+            (Produto.nome.ilike(f"%{q}%")) |  # Pesquisar no nome
+            (Produto.descricao.ilike(f"%{q}%"))  # Pesquisar na descrição
+        )
+
+    # Contar o total de produtos após aplicar os filtros
+    
+
+    # Aplicar paginação
+    
+
+    if not produtos_query:
         raise HTTPException(status_code=404, detail="Nenhum produto encontrado para este usuário.")
 
     # Preparar a resposta
     produtos_response = []
-    for produto in produtos:
+    for produto in produtos_query:
         # Calcular tempo desde a publicação
         tempo_publicacao = calcular_tempo_publicacao(produto.data_publicacao)
 
@@ -982,10 +993,10 @@ def get_produtos_usuario_logado(
             "category": produto.categoria,
             "details": produto.detalhes,
             "type": produto.tipo,
-            "views": produto.visualizacoes,
+            "views": formatar_contagem(produto.visualizacoes),
             "active": produto.ativo,
             "customer_id": produto.CustomerID,
-            "likes": produto.likes,
+            "likes": formatar_contagem(produto.likes),
             "slug": produto.slug,
             "time": tempo_publicacao,
             "liked": liked,
@@ -993,11 +1004,11 @@ def get_produtos_usuario_logado(
         })
 
     return {
-        "total": total_produtos,
+        
         "produtos": produtos_response,
-        "pagina_atual": skip // limit + 1,
-        "total_paginas": (total_produtos + limit - 1) // limit,
+              
     }
+
 
 @router.post("/usuarios/{usuario_id}/status/")
 async def criar_status(
