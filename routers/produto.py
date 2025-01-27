@@ -1209,7 +1209,7 @@ async def renovar_produto(
         "nova_data_expiracao": produto.data_publicacao + timedelta(days=30),
         "taxa_descontada": float(taxa),
         "saldo_principal_restante": float(current_user.wallet.saldo_principal),
-        "saldo_bonus_restante": float(current_user.wallet.saldo_bonus)
+        "saldo_bonus_restante": float(current_user.wallet.bonus)
     }
 
 
