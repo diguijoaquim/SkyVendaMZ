@@ -105,6 +105,9 @@ Base.metadata.create_all(bind=engine)
 async def verificar_expiracoes():
     await verificar_produtos_expiracao()
 
+
+
+
 if __name__ == "__main__":
      import uvicorn
      uvicorn.run(app,host="0.0.0.0", port=8000) 

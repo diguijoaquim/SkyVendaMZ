@@ -1,64 +1,34 @@
-import psycopg2
+import requests
 
-def excluir_criar_tabela_pedido():
-    # URL de conexão ao banco de dados
-    DATABASE_URL = "postgresql://postgres:uCUCjSkArNRiteSTDrxMuwyldXGKeTQO@junction.proxy.rlwy.net:42999/railway"
+# Configurações da API
+url = "https://api.africastalking.com/version1/messaging/bulk"
+headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    #s"apiKey": "atsk_b4716771c78e659d863ad07c5292284d5501df7a3d5ec4997de3657581d8f3388203aabe"  # Substitua pela sua API Key
+}
+
+# Dados para enviar o SMS
+data = {
+    "username": "sandbox",  # Substitua pelo seu nome de usuário
+    "message": "This is a sample message.",  # Mensagem que será enviada
+    "senderId": "34904",  # ID do remetente (opcional, dependendo da configuração)
+    "phoneNumbers": [
+        "+258860289475",  # Números de telefone no formato internacional
+        "+258848446324"
+    ]
+}
+
+# Fazendo a requisição POST
+try:
+    response = requests.post(url, json=data, headers=headers)
     
-    try:
-        # Conectar ao banco de dados
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-
-        print("Conexão com o banco de dados estabelecida com sucesso!")
-
-        # Comando SQL para excluir a tabela 'pedido', caso exista
-        excluir_tabela_pedido = "DROP TABLE IF EXISTS pedido CASCADE;"
-        
-        # Comando SQL para criar a tabela 'pedido'
-        criar_tabela_pedido = """
-            CREATE TABLE pedido (
-                id SERIAL PRIMARY KEY,
-                customer_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-                produto_id INTEGER NOT NULL REFERENCES produto(id) ON DELETE CASCADE,
-                quantidade INTEGER NOT NULL,
-                preco_total DECIMAL,
-                status_visivel_comprador BOOLEAN DEFAULT FALSE,
-                status_visivel_vendedor BOOLEAN DEFAULT FALSE,
-                data_pedido TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                status VARCHAR(350),
-                aceito_pelo_vendedor BOOLEAN DEFAULT FALSE,
-                tipo VARCHAR(20),
-                recebido_pelo_cliente BOOLEAN DEFAULT FALSE,
-                data_aceite TIMESTAMP,
-                data_envio TIMESTAMP,
-                data_entrega TIMESTAMP,
-                data_confirmacao_recebimento TIMESTAMP,
-                data_limite_confirmacao TIMESTAMP
-            );
-        """
-
-        # Excluindo a tabela, se existir
-        print("Excluindo a tabela 'pedido', caso exista...")
-        cursor.execute(excluir_tabela_pedido)
-
-        # Criando a tabela
-        print("Criando a tabela 'pedido'...")
-        cursor.execute(criar_tabela_pedido)
-
-        # Commit para salvar as mudanças no banco de dados
-        conn.commit()
-        print("Tabela 'pedido' criada com sucesso!")
-
-    except Exception as e:
-        print(f"Erro ao excluir e criar a tabela 'pedido': {e}")
-    
-    finally:
-        # Fechar o cursor e a conexão com o banco de dados
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
-        print("Conexão com o banco de dados fechada.")
-
-# Chamar a função
-excluir_criar_tabela_pedido()
+    # Verificando a resposta
+    if response.status_code == 200:
+        print("SMS enviado com sucesso!")
+        print("Resposta:", response.json())
+    else:
+        print("Erro ao enviar SMS:", response.status_code)
+        print("Detalhes:", response.text)
+except Exception as e:
+    print("Erro na requisição:", str(e))

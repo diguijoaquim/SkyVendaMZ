@@ -16,6 +16,41 @@ from datetime import datetime, timedelta
 router=APIRouter(prefix="/produtos",tags=["rotas de produtos"])
 
 
+
+
+
+@router.post("/{produto_id}/ativar-automatica")
+async def ativar_renovacao_automatica(
+    produto_id: int,
+    ativar: bool,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Ativa ou desativa a renovação automática para um produto.
+    """
+    produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    # Verificar se o usuário é dono do produto
+    if produto.CustomerID != current_user.id:
+        raise HTTPException(status_code=403, detail="Não autorizado")
+
+    # Atualizar a renovação automática
+    produto.renovacao_automatica = ativar
+    db.commit()
+
+    return {
+        "message": f"Renovação automática {'ativada' if ativar else 'desativada'} com sucesso",
+        "renovacao_automatica": produto.renovacao_automatica
+    }
+
+
+
+
+
+
 @router.put("/status/atualizar/{status_id}")
 def atualizar_status(
     status_id: int,
@@ -174,6 +209,7 @@ async def get_produto(produto_id: int, db: Session = Depends(get_db)):
         "disponiblidade": produto.disponiblidade,
         "descricao": produto.descricao,
         "categoria": produto.categoria,
+        "renovacao":produto.renovacao_automatica,
         "detalhes": produto.detalhes,
         "tipo": produto.tipo,
         "visualizacoes": formatar_contagem(produto.visualizacoes),
@@ -244,44 +280,27 @@ async def create_produto(
     return {"message": "Produto criado com sucesso", "produto": db_produto}
 
 
-
 @router.get("/pesquisa/")
 def pesquisa_avancada(
-    termo: str, 
-    offset: int = Query(0, description="Ponto inicial da paginação"), 
-    limit: int = Query(10, description="Limite de itens por página"), 
-    db: Session = Depends(get_db), 
-    user_id: Optional[int] = Query(None, description="ID opcional do usuário")
+    termo: str,
+    offset: int = Query(1, description="Número da página para paginação (começa em 1)"),
+    limit: int = Query(10, description="Limite de itens por página"),
+    db: Session = Depends(get_db),
+    user_id: Optional[int] = Query(None, description="ID opcional do usuário"),
 ):
     """
     Rota para pesquisa avançada de produtos ativos.
     """
-    query = db.query(Produto)
-    
-    if user_id:
-        # Se for um usuário específico, mostra seus produtos + produtos ativos de outros
-        query = query.filter(
-            or_(
-                Produto.CustomerID == user_id,
-                and_(Produto.ativo == True, Produto.CustomerID != user_id)
-            )
-        )
-    else:
-        # Se não for especificado usuário, mostra apenas produtos ativos
-        query = query.filter(Produto.ativo == True)
-
-    # Aplicar filtro de pesquisa
-    query = query.filter(
-        or_(
-            Produto.nome.ilike(f"%{termo}%"),
-            Produto.descricao.ilike(f"%{termo}%"),
-            Produto.categoria.ilike(f"%{termo}%")
-        )
+    # Chamada da função `executar_pesquisa_avancada`
+    resultados = executar_pesquisa_avancada(
+        termo=termo,
+        db=db,
+        user_id=user_id,
+        limit=limit,
+        offset=offset
     )
 
-    produtos = query.offset(offset).limit(limit).all()
-    
-    return produtos
+    return {"resultados": resultados}
 
 
 
@@ -990,6 +1009,7 @@ def get_produtos_usuario_logado(
             "negociavel": produto.negociavel,
             "availability": produto.disponiblidade,
             "description": produto.descricao,
+            "renovacao":produto.renovacao_automatica,
             "category": produto.categoria,
             "details": produto.detalhes,
             "type": produto.tipo,

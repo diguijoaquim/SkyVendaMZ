@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Form,Body,Query
 from sqlalchemy.orm import Session
-from models import Usuario, Transacao, Publicacao, Notificacao,Seguidor
+from models import Usuario, Transacao, Publicacao, Notificacao,Seguidor,OTP
 from schemas import *
 import random
 from urllib.parse import urlencode
@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from auth import *
 from fastapi.responses import RedirectResponse
 import requests
+#atsk_b4716771c78e659d863ad07c5292284d5501df7a3d5ec4997de3657581d8f3388203aabe
 from sqlalchemy import or_
 import httpx
 import json
@@ -570,24 +571,72 @@ def seguir_usuario_route(
 def get_usuario_seguindo(usuario_id: int, db: Session = Depends(get_db)):
     return get_seguidores(usuario_id, db)
 
-@router.post("/recuperar_senha/")
-def recuperar_senha(email_schema: EmailSchema, db: Session = Depends(get_db)):
-    email = email_schema.email
-    usuario = db.query(Usuario).filter(Usuario.email == email).first()
 
+
+
+def gerar_otp() -> str:
+    """Gera um código OTP de 6 dígitos."""
+    return str(random.randint(100000, 999999))
+
+@router.post("/recuperar_senha/")
+async def enviar_otp(email: str, db: Session = Depends(get_db)):
+    # Verifica se o usuário existe
+    usuario = db.query(Usuario).filter(Usuario.email == email).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-    
-    # Verifica se o usuário tem uma senha configurada
-    if not usuario.senha or usuario.senha == "":
-        raise HTTPException(status_code=400, detail="Usuários cadastrados via Google não podem recuperar senha.")
-    
-    # Gera uma nova senha temporária
-    nova_senha = gerar_senha_temporaria()
 
-    hashed_senha = pwd_context.hash(nova_senha)
-    usuario.senha = hashed_senha
+    # Gera um OTP e define tempo de expiração
+    otp_code = gerar_otp()
+    expiration_time = datetime.utcnow() + timedelta(minutes=5)
+
+    # Salva o OTP no banco de dados
+    otp_entry = OTP(email=email, otp=otp_code, expires_at=expiration_time)
+    db.add(otp_entry)
     db.commit()
+
+    # Corpo do e-mail
+    subject = "Seu código OTP para redefinir a senha"
+    body = f"Olá, {usuario.nome},\n\nSeu código OTP é: {otp_code}\nEste código é válido por 5 minutos.\n\nEquipe SkyVenda."
+
+    # Envia o e-mail usando a sua função
+    email_enviado = send_email(recipient=email, subject=subject, body=body)
+    if not email_enviado:
+        raise HTTPException(status_code=500, detail="Erro ao enviar e-mail. Tente novamente mais tarde.")
+
+    return {"message": "Código OTP enviado para o e-mail."}
+
+
+
+@router.post("/resetar_senha/")
+async def resetar_senha_com_otp(
+    email: str,
+    otp: str,
+    nova_senha: str,
+    db: Session = Depends(get_db)
+):
+    # Busca o OTP no banco de dados
+    otp_entry = db.query(OTP).filter(OTP.email == email, OTP.otp == otp).first()
+    if not otp_entry:
+        raise HTTPException(status_code=400, detail="Código OTP inválido.")
+
+    # Verifica se o OTP está expirado
+    if otp_entry.is_expired():
+        raise HTTPException(status_code=400, detail="Código OTP expirado.")
+
+    # Atualiza a senha do usuário
+    usuario = db.query(Usuario).filter(Usuario.email == email).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+
+    usuario.senha = pwd_context.hash(nova_senha)
+    db.commit()
+
+    # Remove o OTP após o uso
+    db.delete(otp_entry)
+    db.commit()
+
+    return {"message": "Senha redefinida com sucesso."}
+
 
 
 # Função para adicionar saldo usando M-Pesa (sem autenticação)

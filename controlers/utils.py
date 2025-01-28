@@ -2,6 +2,9 @@ from models import Log,Produto,Usuario
 from sqlalchemy.orm import Session
 from datetime import datetime
 import random
+from models import Produto, Usuario  # Importe seus modelos corretamente
+from decimal import Decimal
+from database import SessionLocal
 
 
 
@@ -64,3 +67,44 @@ def gerar_identificador_unico(db: Session):
         identificador = f"sk-{random.randint(100000000, 999999999)}"
         if not db.query(Usuario).filter(Usuario.identificador_unico == identificador).first():
             return identificador
+
+
+
+def renovar_produtos_automaticamente(db: Session):
+    """
+    Renova produtos automaticamente para usuários com renovação ativa e saldo suficiente.
+    """
+    produtos = (
+        db.query(Produto)
+        .filter(
+            Produto.renovacao_automatica == True,  # Apenas produtos com renovação automática ativa
+            Produto.data_expiracao <= datetime.utcnow(),  # Produtos expirados
+        )
+        .all()
+    )
+
+    for produto in produtos:
+        usuario = db.query(Usuario).filter(Usuario.id == produto.usuario_id).first()
+        if not usuario:
+            continue
+
+        # Calcular taxa de renovação com base no preço do produto
+        taxa = calcular_taxa_publicacao(Decimal(produto.preco))  # Função que você já deve ter
+
+        if usuario.saldo_principal >= taxa:
+            # Descontar do saldo principal
+            usuario.saldo_principal -= taxa
+            produto.data_expiracao = datetime.utcnow() + timedelta(days=30)
+        elif usuario.bonus >= taxa:
+            # Descontar do saldo bônus
+            usuario.bonus -= taxa
+            produto.data_expiracao = datetime.utcnow() + timedelta(days=30)
+        else:
+            # Se não houver saldo, não renovar
+            continue
+
+        db.add(produto)
+        db.add(usuario)
+
+    db.commit()
+
